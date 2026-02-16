@@ -1,82 +1,190 @@
-# Docus Default Starter
+# Authyra 🔐
 
-> A beautiful, minimal starter for creating documentation with Docus
+**Pure authentication logic framework for Flutter and Dart.**
 
-This is the default Docus starter template that provides everything you need to build beautiful documentation sites with Markdown and Vue components.
+Authyra is a navigation-agnostic, framework-agnostic authentication solution that works seamlessly across Flutter apps, Dart backends, and CLI tools.
 
-> [!TIP]
-> If you're looking for i18n support, check out the [i18n starter](https://github.com/nuxt-themes/docus/tree/main/.starters/i18n).
+## ✨ Why Authyra?
 
-## ✨ Features
-
-- 🎨 **Beautiful Design** - Clean, modern documentation theme
-- 📱 **Responsive** - Mobile-first responsive design  
-- 🌙 **Dark Mode** - Built-in dark/light mode support
-- 🔍 **Search** - Full-text search functionality
-- 📝 **Markdown Enhanced** - Extended markdown with custom components
-- 🎨 **Customizable** - Easy theming and brand customization
-- ⚡ **Fast** - Optimized for performance with Nuxt 4
-- 🔧 **TypeScript** - Full TypeScript support
+- 🎯 **Navigation-agnostic** - Works with GoRouter, AutoRoute, Navigator, or any routing solution
+- 🔄 **Multi-account support** - Switch between accounts seamlessly
+- ⚡ **Reactive state** - Stream-based architecture that automatically updates your UI
+- 🎨 **Flutter UI included** - Optional widgets for common auth patterns
+- 🧪 **Pure Dart core** - Use on backend, CLI, or any Dart platform
+- 🛡️ **Type-safe** - Full type safety with immutable state
+- 📦 **Zero dependencies** - Core package has minimal dependencies
 
 ## 🚀 Quick Start
 
-```bash
-# Install dependencies
-npm install
+### For Flutter Apps
 
-# Start development server
-npm run dev
+```yaml
+dependencies:
+  flutter_authyra: ^0.1.0
 ```
 
-Your documentation site will be running at `http://localhost:3000`
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_authyra/flutter_authyra.dart';
 
-## 📁 Project Structure
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Configure Authyra
+  Authyra.instance.configure(
+    AuthyraClient(
+      providers: [
+        EmailAuthProvider(
+          validateCredentials: (email, password) async {
+            // Your auth logic here
+            return AuthAccount(
+              id: 'user-123',
+              email: email,
+              displayName: 'John Doe',
+            );
+          },
+        ),
+      ],
+      storage: SecureAuthStorage(),
+    ),
+  );
+  
+  // Initialize (restores session)
+  await Authyra.instance.initialize();
+  
+  runApp(
+    AuthyraScope(
+      child: const MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: AuthGuard(
+        fallback: const LoginScreen(),
+        child: const HomeScreen(),
+      ),
+    );
+  }
+}
+```
+
+### For Dart Backend
+
+```yaml
+dependencies:
+  authyra: ^0.1.0
+```
+
+```dart
+import 'package:authyra/authyra.dart';
+
+void main() async {
+  final authClient = AuthyraClient(
+    providers: [EmailAuthProvider()],
+    storage: InMemoryAuthStorage(),
+  );
+  
+  final account = await authClient.signIn(
+    provider: 'email',
+    credentials: {
+      'email': 'user@example.com',
+      'password': 'secret123',
+    },
+  );
+  
+  print('Logged in: ${account.displayName}');
+}
+```
+
+## 📚 Documentation
+
+- [Getting Started](docs/getting-started/installation.md)
+- [Core Concepts](docs/core-concepts/architecture.md)
+- [API Reference](docs/api-reference/authyra-client.md)
+- [Flutter Integration](docs/flutter/authyra-scope.md)
+- [Examples](docs/examples/basic-app.md)
+
+## 🎯 Philosophy
+
+Authyra separates **authentication logic** from **navigation logic**.
 
 ```
-my-docs/
-├── content/              # Your markdown content
-│   ├── index.md         # Homepage
-│   ├── 1.getting-started/  # Getting started section
-│   └── 2.essentials/    # Essential documentation
-├── public/              # Static assets
-└── package.json         # Dependencies and scripts
+┌─────────────────────────────────────────────────┐
+│ Your App                                        │
+│  ├─ Routing (GoRouter, AutoRoute, etc.)        │
+│  └─ UI (Material, Cupertino, custom)           │
+└─────────────────────────────────────────────────┘
+                     ↓ reacts to
+┌─────────────────────────────────────────────────┐
+│ Authyra                                         │
+│  ├─ Authentication state                        │
+│  ├─ Session management                          │
+│  └─ Provider orchestration                      │
+└─────────────────────────────────────────────────┘
 ```
 
-## ⚡ Built with
+**Authyra tells you WHAT the auth state is.**  
+**You decide WHERE to navigate.**
 
-This starter comes pre-configured with:
+This keeps your routing flexible while having rock-solid auth logic.
 
-- [Nuxt 4](https://nuxt.com) - The web framework
-- [Nuxt Content](https://content.nuxt.com/) - File-based CMS
-- [Nuxt UI](https://ui.nuxt.com) - UI components
-- [Nuxt Image](https://image.nuxt.com/) - Optimized images
-- [Tailwind CSS 4](https://tailwindcss.com/) - Utility-first CSS
-- [Docus Layer](https://www.npmjs.com/package/docus) - Documentation theme
+## 🏗️ Architecture
 
-## 📖 Documentation
-
-For detailed documentation on customizing your Docus project, visit the [Docus Documentation](https://docus.dev)
-
-### 🤖 AI Assistant Skill
-
-Get started quickly with Docus by adding specialized knowledge to your AI assistant (Cursor, Claude, etc.):
-
-```bash
-npx skills add nuxt-content/docus
+```
+┌──────────────────────────────────────────┐
+│ AuthyraClient (Core Logic)              │
+│  • Orchestrate providers + storage       │
+│  • No global state                       │
+│  • 100% testable                         │
+└──────────────────────────────────────────┘
+              ↓ used by
+┌──────────────────────────────────────────┐
+│ AuthyraInstance (Singleton)              │
+│  • Global access via Authyra.instance    │
+│  • Reactive streams                      │
+│  • Memory cache                          │
+└──────────────────────────────────────────┘
+              ↓ consumed by
+┌──────────────────────────────────────────┐
+│ Flutter UI (Optional)                    │
+│  • AuthyraScope (state propagation)      │
+│  • AuthBuilder (reactive UI)             │
+│  • AuthGuard (route protection)          │
+└──────────────────────────────────────────┘
 ```
 
-This skill helps you create documentation faster by providing your AI assistant with best practices, MDC component usage, ready-to-use templates, writing guidelines, and configuration tips for Docus. Perfect for quickly scaffolding new documentation projects.
+## 🔌 Providers
 
-## 🚀 Deployment
+v0.1.0 includes:
 
-Build for production:
+- **EmailAuthProvider** - Email/password authentication
 
-```bash
-npm run build
-```
+Coming soon:
+- GoogleAuthProvider (v0.2.0)
+- GitHubAuthProvider (v0.2.0)
+- AppleAuthProvider (v0.2.0)
 
-The built files will be in the `.output` directory, ready for deployment to any hosting provider that supports Node.js.
+[Learn how to create custom providers →](docs/guides/custom-provider.md)
+
+## 💾 Storage
+
+v0.1.0 includes:
+
+- **InMemoryAuthStorage** - For testing and development
+- **SecureAuthStorage** - Uses flutter_secure_storage (Flutter only)
+
+[Learn how to create custom storage →](docs/guides/custom-storage.md)
+
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 📄 License
 
-[MIT License](https://opensource.org/licenses/MIT) 
+MIT License - see [LICENSE](LICENSE)

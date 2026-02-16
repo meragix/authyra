@@ -1,19 +1,15 @@
 ---
 seo:
-  title: Write beautiful docs with Markdown
-  description: Ship fast, flexible, and SEO-optimized documentation with beautiful
-    design out of the box. Docus brings together the best of the Nuxt ecosystem.
-    Powered by Nuxt UI.
+  title: Authyra | The Modular Auth Framework for Dart & Flutter
+  description: Build secure, flexible, and type-safe authentication flows. Pure Dart core, native OAuth support, and zero-boilerplate integration.
 ---
 
 ::u-page-hero
 #title
-Write beautiful docs with Markdown
+Authentication [Simplified.]{.text-primary} Modular by Design.
 
 #description
-Ship fast, flexible, and SEO-optimized documentation with beautiful design out of the box.
-
-Docus brings the best of the Nuxt ecosystem into one CLI.
+Authyra is a lightweight yet powerful authentication framework for Dart and Flutter. Focus on your features, we handle the tokens, sessions, and provider logic with a clean, interface-driven approach.
 
 #links
   :::u-button
@@ -31,7 +27,7 @@ Docus brings the best of the Nuxt ecosystem into one CLI.
   color: neutral
   icon: simple-icons-github
   size: xl
-  to: https://github.com/nuxt-content/docus
+  to: https://github.com/meragix/authyra
   variant: outline
   ---
   Star on GitHub
@@ -40,84 +36,73 @@ Docus brings the best of the Nuxt ecosystem into one CLI.
 
 ::u-page-section
 #title
-Shipped with many features
+Why developers choose Authyra
 
 #features
   :::u-page-feature
   ---
-  icon: i-simple-icons-nuxt
-  target: _blank
-  to: https://nuxt.com
+  icon: i-lucide-box
   ---
   #title
-  Built with [Nuxt 4]{.text-primary}
+  [Pure Dart]{.text-primary} Core
   
   #description
-  Optimized by the most famous Vue framework. Docus gives you everything you need to build fast, performant, and SEO-friendly websites.
+  Zero dependencies on Flutter in the core engine. Perfect for unit testing, server-side Dart, or sharing auth logic between your mobile app and CLI tools.
   :::
 
   :::u-page-feature
   ---
-  icon: i-simple-icons-nuxt
-  target: _blank
-  to: https://ui.nuxt.com/
+  icon: i-lucide-shield-check
   ---
   #title
-  Powered by [Nuxt UI]{.text-primary}
+  [Type-Safe]{.text-primary} Sessions
   
   #description
-  Beautiful out of the box, minimal by design but highly customizable. Docus leverages Nuxt UI to give you the best docs writing experience with zero boilerplate, just focus on your content.
+  Stop managing raw Strings. Authyra provides structured objects for Users and Sessions, with built-in expiration tracking and automatic silent refresh.
   :::
 
   :::u-page-feature
   ---
-  icon: i-simple-icons-nuxt
-  target: _blank
-  to: https://content.nuxt.com
+  icon: i-lucide-users-round
   ---
   #title
-  Enhanced Markdown syntax by [Nuxt Content]{.text-primary}
+  Native [Multi-Account]{.text-primary}
   
   #description
-  The only thing you need to take care about is writing your content. Write your pages in Markdown and extend with MDC syntax to embed Nuxt UI or custom Vue components. Structure, routing, and rendering are handled for you.
+  <!-- Whether it's Google, Apple, or your own custom backend, Authyra’s provider architecture ensures a consistent API across all authentication methods. -->
+  Switch between user profiles seamlessly. Authyra manages a session registry, allowing users to stay logged in with multiple accounts (Work, Personal, etc.) simultaneously.
   :::
 
   :::u-page-feature
   ---
-  icon: i-simple-icons-nuxt
-  target: _blank
-  to: https://nuxt.com/docs/guide/directory-structure/app-config
+  icon: i-lucide-refresh-cw
   ---
   #title
-  Customize with [Nuxt App Config]{.text-primary}
+  Automatic [Token Refresh]{.text-primary}
   
   #description
-  Update colors, social links, header logos and component styles globally using the `app.config.ts`, no direct code modifications required.
+  Never worry about expired access tokens again. Authyra handles the background refresh logic and ensures your users stay authenticated seamlessly.
   :::
 
   :::u-page-feature
   ---
-  icon: i-simple-icons-nuxt
-  target: _blank
-  to: https://content.nuxt.com/studio
+  icon: i-lucide-fingerprint
   ---
   #title
-  Edit in production with [Nuxt Studio]{.text-primary}
+  Security [Best Practices]{.text-primary}
   
   #description
-  Edit your content in production with zero Markdown knowledge required. Let your non technical colleagues collaborate on the documentation and integrate Vue components without code skills.
+  Designed with OWASP and OAuth2 standards in mind. Secure credential handling, PKCE-ready flows, and isolated storage namespaces by default.
   :::
 
   :::u-page-feature
   ---
-  icon: i-simple-icons-nuxt
-  target: _blank
-  to: https://ui.nuxt.com/components/content-search
+  icon: i-lucide-code-2
   ---
   #title
-  Built-in navigation and [full-text search]{.text-primary}
+  [Minimal]{.text-primary} Boilerplate
   
   #description
-  Only focus on ordering your content, Docus handles the search modal and auto-generates the side navigation for you.
+  Initialize, sign in, and listen to state changes. Authyra is designed to be integrated in minutes, with clean Streams and reactive state management.
   :::
 ::

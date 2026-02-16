@@ -1,0 +1,40 @@
+docs/
+├── README.md                          # Landing page
+├── getting-started/
+│   ├── installation.md
+│   ├── quick-start.md
+│   ├── configuration.md
+│   └── first-auth.md
+├── core-concepts/
+│   ├── architecture.md
+│   ├── providers.md
+│   ├── storage.md
+│   ├── sessions.md
+│   └── reactivity.md
+├── guides/
+│   ├── email-auth.md
+│   ├── route-protection.md
+│   ├── custom-provider.md
+│   ├── custom-storage.md
+│   └── testing.md
+├── api-reference/
+│   ├── authyra-client.md
+│   ├── authyra-instance.md
+│   ├── auth-account.md
+│   ├── auth-provider.md
+│   └── auth-storage.md
+├── flutter/
+│   ├── authyra-scope.md
+│   ├── auth-builder.md
+│   ├── auth-guard.md
+│   └── extensions.md
+├── examples/
+│   ├── basic-app.md
+│   ├── backend-usage.md
+│   └── testing-setup.md
+├── migration/
+│   ├── from-firebase.md
+│   └── from-supabase.md
+├── troubleshooting.md
+├── faq.md
+└── changelog.md
