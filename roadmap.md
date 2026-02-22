@@ -20,7 +20,7 @@ Package authyra
 
 ✅ Models
 
- AuthAccount (id, email, displayName, metadata, tokens)
+ AuthUser (id, email, displayName, metadata, tokens)
  AuthProvider (interface abstraite)
  AuthToken (accessToken, refreshToken, expiresAt)
  AuthSession (account + token + metadata)

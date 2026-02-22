@@ -13,6 +13,7 @@ coverage/
 .vscode/
 *.iml
 *.code-workspace
+CLAUDE.md
 
 # Melos
 .melos_tool/

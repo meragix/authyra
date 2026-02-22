@@ -1,37 +1,95 @@
 import 'package:equatable/equatable.dart';
 import 'package:authyra/src/models/auth_user.dart';
 
-/// Represents an authenticated session with tokens and expiration
+/// Represents an authenticated session containing tokens and user identity.
 ///
-/// Immutable model that stores all authentication data for a single account.
-/// Supports multiple providers through [linkedProviders].
+/// [AuthSession] is an **immutable value object** that stores all
+/// authentication data for a single account: the associated [AuthUser],
+/// access/refresh tokens, expiry metadata, and linked provider identifiers.
+///
+/// ## Lifecycle
+///
+/// ```
+/// sign-in → AuthSession created
+///         → [isExpiringSoon] triggers proactive refresh
+///         → [refreshed] returns new session with updated tokens
+///         → sign-out → session discarded from [SessionRegistry]
+/// ```
+///
+/// ## Multi-provider support
+///
+/// A single user can authenticate through multiple providers. The primary
+/// provider is stored in [providerId]; all linked providers are listed in
+/// [linkedProviders].
+///
+/// ```dart
+/// final session = AuthSession(
+///   providerId: 'google',
+///   user: user,
+///   accessToken: 'ya29.xxx',
+///   expiresAt: DateTime.now().add(const Duration(hours: 1)),
+///   createdAt: DateTime.now(),
+///   lastUsedAt: DateTime.now(),
+/// );
+///
+/// if (session.isExpiringSoon()) {
+///   final refreshed = await client.refresh(session);
+/// }
+/// ```
+///
+/// See also:
+/// - [AuthUser], the identity payload embedded in every session.
+/// - [SessionRegistry], the in-memory store for multi-account sessions.
 class AuthSession extends Equatable {
-  /// Primary authentication provider (e.g., 'google', 'github', 'email')
+  /// Primary authentication provider identifier.
+  ///
+  /// Lowercase slug (e.g., `'google'`, `'github'`, `'email'`). Matches the
+  /// `providerId` declared on the corresponding [AuthProvider].
   final String providerId;
 
-  /// User's profil
+  /// User's identity profile for this session.
   final AuthUser user;
 
-  /// Access token for API requests
+  /// Short-lived access token used to authenticate API requests.
+  ///
+  /// May be `null` for session-cookie-based flows where the token is
+  /// managed server-side and not exposed to the client.
   final String? accessToken;
 
-  /// Refresh token for renewing access tokens
+  /// Long-lived refresh token used to obtain new access tokens.
+  ///
+  /// When non-null and non-empty (see [canRefresh]), the session can be
+  /// silently renewed without requiring the user to re-authenticate.
   final String? refreshToken;
 
-  /// Timestamp when the access token expires
+  /// UTC timestamp at which [accessToken] expires.
+  ///
+  /// `null` means the token has no known expiry (treat as non-expiring or
+  /// rely on server-side enforcement).
   final DateTime? expiresAt;
 
-  /// List of linked authentication providers
+  /// All authentication providers linked to this account.
   ///
-  /// Example: ['google', 'github', 'email']
+  /// Includes [providerId] and any additional providers the user has
+  /// connected. Useful for rendering "connected accounts" UIs.
+  ///
+  /// Example: `['google', 'github', 'email']`
   final List<String> linkedProviders;
 
-  /// Timestamp when the account was created
+  /// UTC timestamp when this session was first created.
   final DateTime createdAt;
 
-  /// Timestamp when the account was last updated
+  /// UTC timestamp of the most recent activity on this session.
+  ///
+  /// Updated by [markAsUsed] and [refreshed]. Used by [SessionRegistry]
+  /// to sort accounts by recency and to elect a new active account when
+  /// the current one is removed.
   final DateTime lastUsedAt;
 
+  /// Creates an [AuthSession].
+  ///
+  /// [providerId], [user], [createdAt], and [lastUsedAt] are required.
+  /// Token fields are optional to support cookie-based flows.
   const AuthSession({
     required this.providerId,
     required this.user,
@@ -39,23 +97,63 @@ class AuthSession extends Equatable {
     this.refreshToken,
     this.expiresAt,
     this.linkedProviders = const [],
-    required this.lastUsedAt,
     required this.createdAt,
+    required this.lastUsedAt,
   });
 
-  /// Checks if the access token is expired
+  // ---------------------------------------------------------------------------
+  // Expiry helpers
+  // ---------------------------------------------------------------------------
+
+  /// Whether the [accessToken] has already expired.
+  ///
+  /// Returns `false` when [expiresAt] is `null` (no known expiry).
   bool get isExpired {
     if (expiresAt == null) return false;
     return DateTime.now().isAfter(expiresAt!);
   }
 
-  /// Checks if the access token will expire soon soon (within threshold)
+  /// Whether the [accessToken] will expire within [threshold].
+  ///
+  /// Defaults to a 5-minute window. Use this to trigger a proactive refresh
+  /// before the token actually expires, avoiding failed API requests.
+  ///
+  /// Returns `false` when [expiresAt] is `null`.
+  ///
+  /// ```dart
+  /// if (session.isExpiringSoon(const Duration(minutes: 10))) {
+  ///   session = await client.refresh(session);
+  /// }
+  /// ```
+  ///
+  /// See also: [shouldRefresh], which expresses the same check with a named
+  /// parameter for use in configuration-driven contexts.
   bool isExpiringSoon([Duration threshold = const Duration(minutes: 5)]) {
     if (expiresAt == null) return false;
     return DateTime.now().add(threshold).isAfter(expiresAt!);
   }
 
-  /// Time remaining until expiration
+  /// Whether the session should be refreshed given a configurable [threshold].
+  ///
+  /// Semantically equivalent to [isExpiringSoon] but accepts a named parameter,
+  /// making it ergonomic in configuration-driven auto-refresh logic.
+  ///
+  /// ```dart
+  /// // Used internally by AuthyraClient's auto-refresh scheduler:
+  /// if (session.shouldRefresh(threshold: config.refreshThreshold)) {
+  ///   await client.refresh(session);
+  /// }
+  /// ```
+  ///
+  /// Returns `false` when [expiresAt] is `null`.
+  bool shouldRefresh({Duration threshold = const Duration(minutes: 5)}) {
+    if (expiresAt == null) return false;
+    return DateTime.now().isAfter(expiresAt!.subtract(threshold));
+  }
+
+  /// Duration remaining until [accessToken] expiration.
+  ///
+  /// Returns [Duration.zero] if already expired or when [expiresAt] is `null`.
   Duration get timeUntilExpiration {
     if (expiresAt == null) return Duration.zero;
     final now = DateTime.now();
@@ -63,38 +161,63 @@ class AuthSession extends Equatable {
     return expiresAt!.difference(now);
   }
 
-  /// Check if refresh token is available
+  // ---------------------------------------------------------------------------
+  // Capability checks
+  // ---------------------------------------------------------------------------
+
+  /// Whether a refresh token is available to renew the access token silently.
   bool get canRefresh => refreshToken != null && refreshToken!.isNotEmpty;
 
-  bool shouldRefresh({Duration threshold = const Duration(minutes: 5)}) {
-    if (expiresAt == null) return false;
-    return DateTime.now().isAfter(expiresAt!.subtract(threshold));
-  }
-
-  /// Checks if a provider is linked to this account
-  bool hasLinkedProvider(String provider) {
-    return linkedProviders.contains(provider);
-  }
-
-  /// Returns the namespace key for this account
+  /// Whether [provider] is linked to this account.
   ///
-  /// Used for cache isolation: "session:{userId}"
+  /// ```dart
+  /// if (session.hasLinkedProvider('github')) {
+  ///   showGitHubConnectionBadge();
+  /// }
+  /// ```
+  bool hasLinkedProvider(String provider) => linkedProviders.contains(provider);
+
+  // ---------------------------------------------------------------------------
+  // Cache / namespace helpers
+  // ---------------------------------------------------------------------------
+
+  /// Cache key for this session, formatted as `session:{userId}`.
+  ///
+  /// Guarantees per-user isolation in shared caches (Redis, Hive, etc.).
+  /// Asserts that [AuthUser.id] is non-empty as a defence-in-depth check.
   String get namespaceKey {
-    assert(user.id.isNotEmpty, 'User ID must not be empty for security isolation');
+    assert(user.id.isNotEmpty, 'User ID must not be empty for cache isolation');
     return 'session:${user.id}';
   }
 
-  /// Returns the cache namespace identifier
+  /// The user ID used as the cache namespace identifier.
   ///
-  /// Used by cache libraries (TanStack, Riverpod) for data isolation
+  /// Consumed by cache adapters (e.g., Riverpod family, TanStack Query) to
+  /// scope cached data per authenticated user.
   String get cacheNamespace => user.id;
 
-  /// Update last used timestamp
-  AuthSession markAsUsed() {
-    return copyWith(lastUsedAt: DateTime.now());
-  }
+  // ---------------------------------------------------------------------------
+  // Mutation helpers
+  // ---------------------------------------------------------------------------
 
-  /// Update tokens after refresh
+  /// Returns a copy of this session with [lastUsedAt] set to now.
+  ///
+  /// Call this whenever the session is accessed to maintain accurate
+  /// recency ordering in [SessionRegistry].
+  AuthSession markAsUsed() => copyWith(lastUsedAt: DateTime.now());
+
+  /// Returns a copy of this session with updated tokens after a refresh.
+  ///
+  /// [newRefreshToken] is optional; when omitted, the existing [refreshToken]
+  /// is preserved (common in rotating-token flows where only the access token
+  /// changes).
+  ///
+  /// ```dart
+  /// final renewed = session.refreshed(
+  ///   newAccessToken: response.accessToken,
+  ///   newExpiresAt: response.expiresAt,
+  /// );
+  /// ```
   AuthSession refreshed({
     required String newAccessToken,
     String? newRefreshToken,
@@ -108,6 +231,9 @@ class AuthSession extends Equatable {
     );
   }
 
+  /// Returns a copy of this session with the specified fields replaced.
+  ///
+  /// Fields not specified retain their current values.
   AuthSession copyWith({
     String? providerId,
     AuthUser? user,
@@ -130,6 +256,15 @@ class AuthSession extends Equatable {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Serialisation
+  // ---------------------------------------------------------------------------
+
+  /// Serialises this session to a JSON-compatible map.
+  ///
+  /// Timestamps are encoded as ISO 8601 strings. [accessToken] and
+  /// [refreshToken] are included — ensure the output is stored securely
+  /// (encrypted storage, never plain localStorage in browser environments).
   Map<String, dynamic> toJson() => {
         'providerId': providerId,
         'user': user.toJson(),
@@ -141,18 +276,37 @@ class AuthSession extends Equatable {
         'lastUsedAt': lastUsedAt.toIso8601String(),
       };
 
+  /// Deserialises an [AuthSession] from a JSON map.
+  ///
+  /// - [accessToken] and [refreshToken] are treated as nullable.
+  /// - [expiresAt] is nullable; an absent or `null` value means no known expiry.
+  /// - [createdAt] and [lastUsedAt] fall back to [DateTime.now] when absent,
+  ///   which is safe for sessions migrated from older storage formats.
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     return AuthSession(
       providerId: json['providerId'] as String,
       user: AuthUser.fromJson(json['user'] as Map<String, dynamic>),
-      accessToken: json['accessToken'] as String,
+      accessToken: json['accessToken'] as String?,
       refreshToken: json['refreshToken'] as String?,
-      expiresAt: DateTime.parse(json['expiresAt'] as String),
-      linkedProviders: (json['linkedProviders'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : DateTime.now(),
-      lastUsedAt: json['lastUsedAt'] != null ? DateTime.parse(json['lastUsedAt'] as String) : DateTime.now(),
+      expiresAt: json['expiresAt'] != null
+          ? DateTime.parse(json['expiresAt'] as String)
+          : null,
+      linkedProviders: (json['linkedProviders'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : DateTime.now(),
+      lastUsedAt: json['lastUsedAt'] != null
+          ? DateTime.parse(json['lastUsedAt'] as String)
+          : DateTime.now(),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Equatable / Object
+  // ---------------------------------------------------------------------------
 
   @override
   List<Object?> get props => [
@@ -168,5 +322,6 @@ class AuthSession extends Equatable {
 
   @override
   String toString() =>
-      'AuthSession(userId: ${user.id}, email: ${user.email}, providerId: $providerId, linkedProviders: $linkedProviders)';
+      'AuthSession(userId: ${user.id}, provider: $providerId, '
+      'expired: $isExpired, linkedProviders: $linkedProviders)';
 }
