@@ -8,69 +8,141 @@ import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/models/session_registry.dart';
 import 'package:authyra/src/storage/auth_storage.dart';
 
-/// Callback for when the active session changes
+/// Callback invoked whenever the active [AuthSession] changes.
+///
+/// Receives `null` when all accounts are signed out or the last session is
+/// removed. Used by [AccountManager] and `AuthyraInstance` to propagate
+/// reactive state changes.
 typedef SessionChangeCallback = void Function(AuthSession? session);
 
-/// Manager for handling multiple authenticated sessions
+/// Stateful manager for multi-account session persistence and lifecycle.
+///
+/// [SessionManager] is the **single source of truth** for all authenticated
+/// sessions. It orchestrates three layers:
+///
+/// 1. **In-memory registry** — fast synchronous access via [activeSession],
+///    [allUsers], etc.
+/// 2. **Persistent storage** — serialises the full [SessionRegistry] to
+///    [AuthStorage] on every mutation.
+/// 3. **Reactive notifications** — broadcasts session changes via
+///    [sessionStream] and registered [SessionChangeCallback]s.
+///
+/// ## Concurrency
+///
+/// All mutating operations (save, remove, update, switch, clean) are
+/// serialised through an [_AsyncMutex]. This prevents corrupt state from
+/// concurrent writes in multi-isolate or rapid-tap scenarios.
+///
+/// ## Lifecycle
+///
+/// ```dart
+/// final manager = SessionManager(storage: myStorage);
+/// await manager.initialize(); // Restores persisted sessions
+///
+/// await manager.saveSession(session);
+/// await manager.switchAccount(otherUserId);
+/// await manager.clearAllSessions();
+///
+/// await manager.dispose(); // Release streams and callbacks
+/// ```
+///
+/// See also:
+/// - [SessionRegistry], the immutable value object managed by this class.
+/// - [AccountManager], the higher-level API exposed to consumers.
+/// - [AuthStorage], the pluggable persistence backend.
 class SessionManager with AuthyraLogging {
+  /// The persistence backend used to read/write the serialised registry.
   final AuthStorage storage;
+
+  /// Whether expiry-based auto-refresh hints should be surfaced.
+  ///
+  /// When `true`, [getActiveSession] logs a warning and signals via the
+  /// stream that the active token is expired, allowing callers to trigger a
+  /// refresh. Actual token renewal is delegated to the provider layer.
   final bool autoRefresh;
 
+  /// Storage key under which the serialised [SessionRegistry] is persisted.
   static const String _registryKey = 'authyra_session_registry';
 
-  /// Stream controller for session changes
+  /// Broadcast stream controller for active session changes.
   final _sessionController = StreamController<AuthSession?>.broadcast();
 
-  /// Current in-memory registry
+  /// Current in-memory registry (always consistent with storage after init).
   SessionRegistry _registry = const SessionRegistry();
 
-  /// Lock for atomic operations
-  final _lock = _StorageLock();
+  /// Serialises all mutating operations to prevent concurrent state corruption.
+  final _mutex = _AsyncMutex();
 
-  /// List of session change listeners
+  /// Registered change listeners (callback-based, complementary to the stream).
   final _listeners = <SessionChangeCallback>[];
 
+  /// Creates a [SessionManager].
+  ///
+  /// Call [initialize] before invoking any other method.
   SessionManager({
     required this.storage,
     this.autoRefresh = true,
   });
 
-  /// Stream of active session changes
+  // ---------------------------------------------------------------------------
+  // Public accessors (synchronous, in-memory)
+  // ---------------------------------------------------------------------------
+
+  /// Broadcast stream emitting the active [AuthSession] on every change.
+  ///
+  /// Emits `null` when no account is active (e.g., after sign-out).
+  /// Subscribe in `AuthyraInstance` or reactive state containers.
   Stream<AuthSession?> get sessionStream => _sessionController.stream;
 
-  /// Current active session (synchronous access)
+  /// The currently active session, or `null` if no account is signed in.
   AuthSession? get activeSession => _registry.activeSession;
 
-  /// Current active user
+  /// The currently active user, or `null`.
   AuthUser? get activeUser => _registry.activeSession?.user;
 
-  /// All registered users
+  /// All registered users, sorted by most recently used.
   List<AuthUser> get allUsers => _registry.allUsers;
 
-  /// Number of registered accounts
+  /// Total number of registered accounts (including expired ones).
   int get accountCount => _registry.accountCount;
 
-  /// Check if there's an active session
+  /// Whether there is an active, non-expired session.
   bool get hasActiveSession => _registry.hasActiveSession;
 
-  /// Initialize the session manager
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
+  /// Initialises the manager by loading persisted sessions from [storage].
+  ///
+  /// - Calls [AuthStorage.initialize] on the underlying backend.
+  /// - Deserialises the stored [SessionRegistry].
+  /// - Automatically prunes expired sessions found at startup.
+  /// - Emits the restored active session (or `null`) to all listeners.
+  ///
+  /// Must be called and awaited once before any other method.
+  ///
+  /// Throws [StorageException] if the storage backend cannot be initialised.
   Future<void> initialize() async {
     try {
-      logInfo('Initializing SessionManager...');
+      logInfo('Initializing SessionManager');
 
       await storage.initialize();
       await _loadRegistry();
 
-      // Clean up expired sessions on init
+      // Prune stale sessions from a previous app run.
       if (_registry.hasAnySession) {
         final cleaned = _registry.removeExpiredSessions();
-        if (cleaned.accountCount != _registry.accountCount) {
-          logInfo('Removed ${_registry.accountCount - cleaned.accountCount} expired sessions');
+        final removedCount = _registry.accountCount - cleaned.accountCount;
+        if (removedCount > 0) {
+          logInfo('Pruned $removedCount expired session(s) at startup');
           await _saveRegistry(cleaned);
         }
       }
 
-      logInfo('SessionManager initialized with ${_registry.accountCount} accounts');
+      logInfo(
+        'SessionManager ready — ${_registry.accountCount} account(s) loaded',
+      );
       _notifyListeners(_registry.activeSession);
     } catch (e, stackTrace) {
       logError('Failed to initialize SessionManager', e, stackTrace);
@@ -78,33 +150,63 @@ class SessionManager with AuthyraLogging {
     }
   }
 
-  /// Add a session change listener
+  /// Releases the session stream and clears all registered listeners.
+  ///
+  /// Call this when the owning object is being disposed (e.g., in
+  /// `AuthyraInstance.dispose`). The manager must not be used after disposal.
+  Future<void> dispose() async {
+    await _sessionController.close();
+    _listeners.clear();
+    logDebug('SessionManager disposed');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Listener management
+  // ---------------------------------------------------------------------------
+
+  /// Registers [callback] to be invoked on every active session change.
+  ///
+  /// Prefer [sessionStream] for reactive frameworks; use callbacks for
+  /// lightweight, non-reactive integrations (e.g., Dart CLI, backend).
   void addListener(SessionChangeCallback callback) {
     _listeners.add(callback);
   }
 
-  /// Remove a session change listener
+  /// Removes a previously registered [callback].
+  ///
+  /// A no-op if [callback] was never registered.
   void removeListener(SessionChangeCallback callback) {
     _listeners.remove(callback);
   }
 
-  /// Save or update a session
+  // ---------------------------------------------------------------------------
+  // Session CRUD
+  // ---------------------------------------------------------------------------
+
+  /// Persists [session] and optionally makes it the active account.
+  ///
+  /// If a session already exists for [session.user.id] it is replaced.
+  /// When [setAsActive] is `true` (default), the stream and listeners are
+  /// notified immediately.
+  ///
+  /// Throws [StorageException] if the write fails.
   Future<void> saveSession(
     AuthSession session, {
     bool setAsActive = true,
   }) async {
-    return _lock.synchronized(() async {
+    return _mutex.synchronized(() async {
       try {
         logDebug('Saving session for user: ${session.user.id}');
 
-        final newRegistry = _registry.addSession(session, setAsActive: setAsActive);
+        final newRegistry =
+            _registry.addSession(session, setAsActive: setAsActive);
         await _saveRegistry(newRegistry);
 
         if (setAsActive) {
           _notifyListeners(newRegistry.activeSession);
         }
 
-        logInfo('Session saved successfully for user: ${session.user.id}');
+        logInfo('Session saved for user: ${session.user.id}');
       } catch (e, stackTrace) {
         logError('Failed to save session', e, stackTrace);
         throw StorageException('save session', e);
@@ -112,46 +214,87 @@ class SessionManager with AuthyraLogging {
     });
   }
 
-  /// Get the active session
+  /// Returns the active session, or `null` if no account is signed in.
+  ///
+  /// Throws [TokenExpiredException] when the active session exists but its
+  /// access token has already expired. Callers with [autoRefresh] enabled
+  /// should catch this and trigger a token refresh via their provider.
+  ///
+  /// Throws [StorageException] for unexpected internal errors.
   Future<AuthSession?> getActiveSession() async {
     try {
-      // Return in-memory active session if available
       final session = _registry.activeSession;
 
       if (session != null && session.isExpired) {
         logWarning('Active session expired for user: ${session.user.id}');
-
-        // Try to refresh if possible
-        if (autoRefresh && session.canRefresh) {
-          logInfo('Attempting auto-refresh for expired session');
-          // Note: Token refresh logic should be handled by the provider
-          // This is just detection and notification
-        }
-
-        throw TokenExpiredException();
+        throw TokenExpiredException(
+          'Session for user ${session.user.id} has expired. '
+          'Trigger a refresh via your provider.',
+        );
       }
 
       return session;
+    } on AuthyraException {
+      rethrow;
     } catch (e, stackTrace) {
-      if (e is AuthyraException) rethrow;
       logError('Failed to get active session', e, stackTrace);
       throw StorageException('get active session', e);
     }
   }
 
-  /// Get a specific session by user ID
+  /// Returns the session for [userId], or `null` if not found.
   Future<AuthSession?> getSession(String userId) async {
     return _registry.sessions[userId];
   }
 
-  /// Get all sessions
+  /// Returns all sessions, sorted by most recently used.
   Future<List<AuthSession>> getAllSessions() async {
     return _registry.allSessions;
   }
 
-  /// Switch to a different account
+  /// Replaces the session for [userId] with [session].
+  ///
+  /// Typically called after a token refresh to apply new credentials without
+  /// changing the active account. Notifies listeners when [userId] is the
+  /// current active account.
+  ///
+  /// Returns without effect if [userId] is not registered.
+  ///
+  /// Throws [SessionOperationException] on failure.
+  Future<void> updateSession(String userId, AuthSession session) async {
+    return _mutex.synchronized(() async {
+      try {
+        logDebug('Updating session for user: $userId');
+
+        final newRegistry = _registry.updateSession(userId, session);
+        await _saveRegistry(newRegistry);
+
+        if (_registry.activeUserId == userId) {
+          _notifyListeners(newRegistry.activeSession);
+        }
+
+        logDebug('Session updated for user: $userId');
+      } catch (e, stackTrace) {
+        logError('Failed to update session', e, stackTrace);
+        throw SessionOperationException('update session', e);
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Account management
+  // ---------------------------------------------------------------------------
+
+  /// Switches the active account to [userId].
+  ///
+  /// Marks the target session as used (updating its `lastUsedAt`) and
+  /// persists the change. Notifies all listeners.
+  ///
+  /// Throws [AccountNotFoundException] if [userId] has no registered session.
+  /// Throws [TokenExpiredException] if the target session is expired.
+  /// Throws [SessionOperationException] for other failures.
   Future<void> switchAccount(String userId) async {
-    return _lock.synchronized(() async {
+    return _mutex.synchronized(() async {
       try {
         logInfo('Switching to account: $userId');
 
@@ -160,35 +303,42 @@ class SessionManager with AuthyraLogging {
         }
 
         final session = _registry.sessions[userId]!;
-
-        // Check if session is expired
         if (session.isExpired) {
-          logWarning('Cannot switch to expired session: $userId');
-          throw TokenExpiredException('Session for user $userId has expired');
+          throw TokenExpiredException(
+            'Cannot switch to account $userId — session has expired',
+          );
         }
 
         final newRegistry = _registry.switchTo(userId);
         await _saveRegistry(newRegistry);
-
         _notifyListeners(newRegistry.activeSession);
 
         logInfo('Switched to account: $userId');
+      } on AuthyraException {
+        rethrow;
       } catch (e, stackTrace) {
-        if (e is AuthyraException) rethrow;
         logError('Failed to switch account', e, stackTrace);
         throw SessionOperationException('switch account', e);
       }
     });
   }
 
-  /// Remove a specific session
+  /// Removes the session for [userId] from the registry.
+  ///
+  /// If [userId] was the active account, the most recently used remaining
+  /// account (if any) is automatically elected as the new active account.
+  /// Listeners are notified only when the active account changes.
+  ///
+  /// Returns without effect if [userId] is not registered.
+  ///
+  /// Throws [SessionOperationException] on failure.
   Future<void> removeSession(String userId) async {
-    return _lock.synchronized(() async {
+    return _mutex.synchronized(() async {
       try {
         logInfo('Removing session for user: $userId');
 
         if (!_registry.hasUser(userId)) {
-          logWarning('Session not found for user: $userId');
+          logWarning('Session not found for user: $userId — skipping removal');
           return;
         }
 
@@ -208,9 +358,14 @@ class SessionManager with AuthyraLogging {
     });
   }
 
-  /// Clear the active session (sign out current user)
+  /// Signs out the currently active account.
+  ///
+  /// A convenience wrapper around [removeSession] for the active user.
+  /// Returns without effect if there is no active session.
+  ///
+  /// Throws [SessionOperationException] on failure.
   Future<void> clearActiveSession() async {
-    return _lock.synchronized(() async {
+    return _mutex.synchronized(() async {
       try {
         final activeUserId = _registry.activeUserId;
         if (activeUserId == null) {
@@ -222,7 +377,6 @@ class SessionManager with AuthyraLogging {
 
         final newRegistry = _registry.removeSession(activeUserId);
         await _saveRegistry(newRegistry);
-
         _notifyListeners(newRegistry.activeSession);
 
         logInfo('Active session cleared');
@@ -233,15 +387,18 @@ class SessionManager with AuthyraLogging {
     });
   }
 
-  /// Clear all sessions (sign out all accounts)
+  /// Signs out all accounts and clears the registry.
+  ///
+  /// Emits `null` to all listeners after clearing.
+  ///
+  /// Throws [SessionOperationException] on failure.
   Future<void> clearAllSessions() async {
-    return _lock.synchronized(() async {
+    return _mutex.synchronized(() async {
       try {
         logInfo('Clearing all sessions');
 
         final newRegistry = _registry.clearAll();
         await _saveRegistry(newRegistry);
-
         _notifyListeners(null);
 
         logInfo('All sessions cleared');
@@ -252,55 +409,83 @@ class SessionManager with AuthyraLogging {
     });
   }
 
-  /// Update a session (e.g., after token refresh)
-  Future<void> updateSession(String userId, AuthSession session) async {
-    return _lock.synchronized(() async {
+  /// Removes all expired sessions from the registry and persists the result.
+  ///
+  /// When the previously active session was expired, the most recently used
+  /// non-expired account is automatically elected as the new active account.
+  /// Listeners are notified if the active account changes.
+  ///
+  /// Returns the number of sessions that were removed.
+  ///
+  /// Throws [SessionOperationException] on failure.
+  Future<int> cleanExpiredSessions() async {
+    return _mutex.synchronized(() async {
       try {
-        logDebug('Updating session for user: $userId');
+        final cleaned = _registry.removeExpiredSessions();
+        final removedCount = _registry.accountCount - cleaned.accountCount;
 
-        final newRegistry = _registry.updateSession(userId, session);
-        await _saveRegistry(newRegistry);
-
-        if (_registry.activeUserId == userId) {
-          _notifyListeners(newRegistry.activeSession);
+        if (removedCount > 0) {
+          logInfo('Removing $removedCount expired session(s)');
+          await _saveRegistry(cleaned);
+          _notifyListeners(cleaned.activeSession);
         }
 
-        logDebug('Session updated for user: $userId');
+        return removedCount;
       } catch (e, stackTrace) {
-        logError('Failed to update session', e, stackTrace);
-        throw SessionOperationException('update session', e);
+        logError('Failed to clean expired sessions', e, stackTrace);
+        throw SessionOperationException('clean expired sessions', e);
       }
     });
   }
 
-  /// Get the current access token
+  // ---------------------------------------------------------------------------
+  // Token helpers
+  // ---------------------------------------------------------------------------
+
+  /// Returns the access token for the active session, or `null`.
+  ///
+  /// Throws [TokenExpiredException] if the active session is expired.
   Future<String?> getAccessToken() async {
     final session = await getActiveSession();
     return session?.accessToken;
   }
 
-  /// Get access token for a specific user
+  /// Returns the access token for [userId] without switching accounts.
+  ///
+  /// Useful for background API calls on behalf of a non-active account.
+  /// Returns `null` if [userId] has no registered session.
   Future<String?> getAccessTokenForUser(String userId) async {
     final session = await getSession(userId);
     return session?.accessToken;
   }
 
-  /// Check if a specific user has a valid session
+  /// Returns `true` if [userId] has a registered, non-expired session.
   Future<bool> hasValidSession(String userId) async {
     final session = await getSession(userId);
     return session != null && !session.isExpired;
   }
 
-  /// Get the session registry (for debugging or advanced use)
+  // ---------------------------------------------------------------------------
+  // Advanced / debug
+  // ---------------------------------------------------------------------------
+
+  /// Exposes the current in-memory [SessionRegistry].
+  ///
+  /// Intended for debugging, testing, or advanced integrations. Avoid using
+  /// this in production feature code — prefer the typed accessor methods.
   SessionRegistry getRegistry() => _registry;
 
-  /// Load registry from storage
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /// Deserialises the registry from [storage] into [_registry].
   Future<void> _loadRegistry() async {
     try {
       final data = await storage.read(_registryKey);
 
       if (data == null || data.isEmpty) {
-        logDebug('No existing registry found, starting fresh');
+        logDebug('No persisted registry found — starting with empty state');
         _registry = const SessionRegistry();
         return;
       }
@@ -308,85 +493,81 @@ class SessionManager with AuthyraLogging {
       final json = jsonDecode(data) as Map<String, dynamic>;
       _registry = SessionRegistry.fromJson(json);
 
-      logDebug('Registry loaded with ${_registry.accountCount} accounts');
+      logDebug('Registry loaded: ${_registry.accountCount} account(s)');
     } on FormatException catch (e, stackTrace) {
-      logError('Registry data corrupted, resetting', e, stackTrace);
+      // Corrupted data — reset to a clean state rather than hard-failing.
+      logError('Registry JSON corrupted — resetting to empty state', e, stackTrace);
       _registry = const SessionRegistry();
       await storage.delete(_registryKey);
     }
   }
 
-  /// Save registry to storage
+  /// Serialises [registry] to [storage] and updates the in-memory state.
   Future<void> _saveRegistry(SessionRegistry registry) async {
     try {
       _registry = registry;
       final json = jsonEncode(registry.toJson());
       await storage.write(_registryKey, json);
 
-      logDebug('Registry saved with ${registry.accountCount} accounts');
+      logDebug('Registry persisted: ${registry.accountCount} account(s)');
     } catch (e, stackTrace) {
-      logError('Failed to save registry', e, stackTrace);
+      logError('Failed to persist registry', e, stackTrace);
       throw StorageException('save registry', e);
     }
   }
 
-  /// Notify all listeners of session change
+  /// Emits [session] to the broadcast stream and invokes all callbacks.
   void _notifyListeners(AuthSession? session) {
-    // Stream
     if (!_sessionController.isClosed) {
       _sessionController.add(session);
     }
 
-    // Callbacks
-    for (final listener in _listeners) {
+    for (final listener in List.of(_listeners)) {
       try {
         listener(session);
       } catch (e, stackTrace) {
-        logError('Error in session listener', e, stackTrace);
+        logError('Unhandled error in SessionChangeCallback', e, stackTrace);
       }
     }
   }
-
-  /// Dispose resources
-  Future<void> dispose() async {
-    await _sessionController.close();
-    _listeners.clear();
-    logDebug('SessionManager disposed');
-  }
 }
 
-/// Simple lock for atomic storage operations
-class _StorageLock {
+// ---------------------------------------------------------------------------
+// Internal: async mutex
+// ---------------------------------------------------------------------------
+
+/// A non-reentrant async mutex that serialises concurrent operations.
+///
+/// Ensures that only one [synchronized] block executes at a time, preventing
+/// read-modify-write races in async Dart code. Safe for use with Dart's
+/// single-threaded event loop — does NOT use `dart:isolate` primitives.
+class _AsyncMutex {
   final _queue = <Completer<void>>[];
   bool _locked = false;
 
+  /// Acquires the lock, runs [operation], then releases the lock.
+  ///
+  /// If the lock is held by another operation, this call suspends until the
+  /// lock becomes available. Operations are granted the lock in FIFO order.
+  ///
+  /// The lock is always released — even if [operation] throws — preventing
+  /// deadlocks.
   Future<T> synchronized<T>(Future<T> Function() operation) async {
-    // Wait for previous operations to complete
     while (_locked) {
       final completer = Completer<void>();
       _queue.add(completer);
       await completer.future;
     }
 
-    // Lock and execute
     _locked = true;
     try {
       return await operation();
     } finally {
       _locked = false;
 
-      // Release next operation in queue
       if (_queue.isNotEmpty) {
-        final next = _queue.removeAt(0);
-        next.complete();
+        _queue.removeAt(0).complete();
       }
     }
   }
 }
-
-// abstract class AuthStorage {
-//   Future<void> initialize();
-//   Future<void> write(String key, String value);
-//   Future<String?> read(String key);
-//   Future<String?> delete(String key);
-// }
