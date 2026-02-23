@@ -13,8 +13,6 @@ resolution: workspace
 
 dependencies:
   crypto: ^3.0.7
-  dio: ^5.9.1
-  url_launcher: ^6.3.2
   equatable: ^2.0.8
   dart_jsonwebtoken: ^3.3.1
 

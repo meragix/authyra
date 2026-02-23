@@ -23,6 +23,8 @@ export 'src/models/auth_config.dart';
 export 'src/core/authyra_client.dart';
 export 'src/core/authyra_instance.dart';
 export 'src/core/session/account_manager.dart';
+export 'src/core/logger.dart';
+export 'src/core/exceptions.dart';
 
 // ---------------------------------------------------------------------------
 // Provider base + result types
@@ -38,10 +40,6 @@ export 'src/providers/oauth2/oauth2_provider.dart';
 export 'src/providers/oauth2/prebuilt/apple.dart';
 export 'src/providers/oauth2/prebuilt/google.dart';
 export 'src/providers/oauth2/prebuilt/github.dart';
-export 'src/providers/proxy_oauth/proxy_oauth_config.dart'
-    show ProxyOAuthConfig;
-export 'src/providers/proxy_oauth/proxy_oauth_provider.dart'
-    show ProxyOAuthProvider;
 
 // ---------------------------------------------------------------------------
 // Storage interface
@@ -56,7 +54,7 @@ export 'src/providers/oauth2/oauth2_callback_handle.dart';
 // ---------------------------------------------------------------------------
 // JWT utilities
 // ---------------------------------------------------------------------------
-export 'src/providers/helpers/jwt_utils.dart';
+export 'src/internal/jwt_utils.dart';
 
 // ---------------------------------------------------------------------------
 // Convenience alias

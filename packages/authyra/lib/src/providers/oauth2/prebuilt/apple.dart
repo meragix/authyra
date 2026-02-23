@@ -6,7 +6,7 @@ import 'package:authyra/src/core/exceptions.dart';
 import 'package:authyra/src/core/logger.dart';
 import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/providers/auth_provider.dart';
-import 'package:authyra/src/providers/helpers/jwt_utils.dart';
+import 'package:authyra/src/internal/jwt_utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';

@@ -10,6 +10,7 @@ dev_dependencies:
 
 workspace:
   - packages/authyra
+  - packages/authyra_flutter
 
 melos:
   command:

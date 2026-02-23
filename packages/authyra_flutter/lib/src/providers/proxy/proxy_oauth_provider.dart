@@ -1,11 +1,10 @@
 import 'dart:async';
 
-import 'package:authyra/src/core/exceptions.dart';
-import 'package:authyra/src/core/logger.dart';
-import 'package:authyra/src/providers/auth_provider.dart';
-import 'package:authyra/src/providers/proxy_oauth/proxy_oauth_config.dart';
+import 'package:authyra/authyra.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import 'proxy_oauth_config.dart';
 
 /// Authentication provider that delegates the entire OAuth flow to your backend.
 ///
@@ -377,9 +376,7 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
     final accessToken = data['access_token'] as String? ?? token;
     final refreshToken = data['refresh_token'] as String?;
     final expiresIn = data['expires_in'] as int?;
-    final expiresAt = expiresIn != null
-        ? DateTime.now().add(Duration(seconds: expiresIn))
-        : null;
+    final expiresAt = expiresIn != null ? DateTime.now().add(Duration(seconds: expiresIn)) : null;
 
     logInfo('Backend token exchange successful for $id: ${user.id}');
 
