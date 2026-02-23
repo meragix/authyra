@@ -4,7 +4,7 @@ import 'package:authyra/src/exceptions/auth_exceptions.dart';
 import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/session/account_manager.dart';
 import 'package:authyra/src/session/session_manager.dart';
-import 'package:authyra/src/core/validators.dart';
+import 'package:authyra/src/internal/validators.dart';
 import 'package:authyra/src/models/auth_config.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_state.dart';
