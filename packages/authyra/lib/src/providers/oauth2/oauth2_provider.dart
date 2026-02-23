@@ -4,7 +4,6 @@ import 'dart:math';
 
 import 'package:authyra/src/core/exceptions.dart';
 import 'package:authyra/src/core/logger.dart';
-import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/providers/auth_provider.dart';
 import 'package:authyra/src/providers/oauth2/oauth2_config.dart';
 import 'package:crypto/crypto.dart';
@@ -37,73 +36,81 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   String get id => config.providerName;
 
   @override
+  String get name => config.providerName;
+
+  @override
+  AuthProviderType get type => AuthProviderType.oauth2;
+
+  @override
   bool get supportsRefresh => true;
 
   @override
-  Future<AuthUser> signIn({Map<String, dynamic>? data}) async {
+  bool get supportsSignOut => false;
+
+  @override
+  Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
     try {
       logInfo('Starting OAuth2 flow for ${config.providerName}');
 
-      // Step 1: Generate PKCE values if enabled
+      // Step 1: Generate PKCE values (and state for CSRF) if enabled.
       if (config.usePkce) {
         _generatePkceValues();
-        logDebug('PKCE enabled - code verifier generated');
+        logDebug('PKCE enabled — code verifier generated');
       } else {
-        // Still generate state for CSRF protection
         _generateState();
-        logDebug('PKCE disabled - using state only');
+        logDebug('PKCE disabled — using state parameter only');
       }
 
-      // Step 2: Build authorization URL
+      // Step 2: Build authorization URL.
       final authUrl = _buildAuthorizationUrl();
       logDebug('Authorization URL built');
 
-      // Step 3: Open browser and wait for callback
-      logDebug('Opening authorization URL...');
+      // Step 3: Open browser and wait for the redirect callback.
       final callbackParams = await _openAuthorizationUrl(authUrl);
-      logDebug('Received callback from OAuth provider');
+      logDebug('Redirect callback received');
 
-      // Step 4: Verify state (CSRF protection)
+      // Step 4: Verify state (CSRF protection).
       _verifyState(callbackParams);
 
-      // Step 5: Check for errors in callback
+      // Step 5: Check for OAuth error parameters in the callback.
       _checkForErrors(callbackParams);
 
-      // Step 6: Get authorization code
+      // Step 6: Extract the authorization code.
       final code = callbackParams['code'];
       if (code == null || code.isEmpty) {
         throw AuthenticationFailedException(
-          'No authorization code received from provider',
+          'No authorization code in callback from ${config.providerName}',
           providerName: config.providerName,
         );
       }
       logDebug('Authorization code received');
 
-      // Step 7: Exchange code for tokens
+      // Step 7: Exchange code for tokens.
       final tokens = await _exchangeCodeForTokens(code);
-      logDebug('Tokens received from provider');
+      logDebug('Tokens received from ${config.providerName}');
 
-      // Step 8: Fetch user info
+      // Step 8: Fetch the user profile from the userinfo endpoint.
       final userInfo = await _fetchUserInfo(tokens['access_token']!);
-      logDebug('User info fetched successfully');
+      logDebug('User info fetched');
 
-      // Step 9: Create AuthSession from provider data
+      // Step 9: Extract user from the provider-specific userInfo map.
       final user = config.userExtractor(userInfo);
 
-      // Step 10: Return user with tokens
-      final authenticatedUser = AuthUser(
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        metadata: user.metadata,
-        // provider: name,
-        // accessToken: tokens['access_token'],
-        // refreshToken: tokens['refresh_token'],
-      );
+      // Step 10: Parse expiry from the token response (if present).
+      final expiresIn = tokens['expires_in'];
+      final expiresAt = expiresIn != null
+          ? DateTime.now().add(Duration(seconds: int.parse(expiresIn)))
+          : null;
 
-      logInfo('OAuth2 sign in successful for ${id}');
-      return authenticatedUser;
+      logInfo('OAuth2 sign in successful for $id');
+
+      // Return the full result including tokens — never discard them.
+      return AuthSignInResult(
+        user: user,
+        accessToken: tokens['access_token'],
+        refreshToken: tokens['refresh_token'],
+        expiresAt: expiresAt,
+      );
     } on AuthyraException {
       rethrow;
     } catch (e, stackTrace) {
@@ -119,18 +126,19 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   }
 
   @override
-  Future<void> signOut() async {
-    logDebug('Sign out called for ${config.providerName}');
-    // Most OAuth providers don't require explicit sign out via API
-    // Token revocation can be implemented here if needed
+  Future<void> signOut({String? userId}) async {
+    // Most OAuth providers do not expose a token revocation endpoint that
+    // requires explicit sign-out. Override in subclasses when needed
+    // (e.g., Google's /revoke endpoint).
+    logDebug('signOut called for ${config.providerName} — no-op');
   }
 
   @override
-  Future<AuthUser?> refreshToken(String refreshToken) async {
+  Future<AuthTokenResult?> refreshToken(String refreshToken) async {
     try {
       logDebug('Refreshing token for ${config.providerName}');
 
-      final data = {
+      final body = {
         'grant_type': 'refresh_token',
         'refresh_token': refreshToken,
         'client_id': config.clientId,
@@ -140,34 +148,37 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
 
       final response = await _dio.post(
         config.tokenEndpoint,
-        data: data,
+        data: body,
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
           headers: config.tokenHeaders,
         ),
       );
 
-      final tokens = response.data as Map<String, dynamic>;
-      final newAccessToken = tokens['access_token'] as String;
-      //final newRefreshToken = tokens['refresh_token'] as String? ?? refreshToken;
+      final data = response.data as Map<String, dynamic>;
+      final newAccessToken = data['access_token'] as String;
+      final newRefreshToken = data['refresh_token'] as String?;
+      final expiresIn = data['expires_in'] as int?;
+      final expiresAt = expiresIn != null
+          ? DateTime.now().add(Duration(seconds: expiresIn))
+          : DateTime.now().add(const Duration(hours: 1));
 
-      // Fetch updated user info
-      final userInfo = await _fetchUserInfo(newAccessToken);
-      final user = config.userExtractor(userInfo);
+      logDebug('Token refreshed successfully for ${config.providerName}');
 
-      return user;
+      return AuthTokenResult(
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken, // null = retain existing token
+        expiresAt: expiresAt,
+      );
     } on DioException catch (e) {
-      logError('Token refresh failed', e);
+      logError('Token refresh failed for ${config.providerName}', e);
       throw TokenRefreshFailedException(
         'Failed to refresh token for ${config.providerName}',
         e,
       );
     } catch (e, stackTrace) {
-      logError('Token refresh failed', e, stackTrace);
-      throw TokenRefreshFailedException(
-        'Unexpected error during token refresh',
-        e,
-      );
+      logError('Unexpected error during token refresh', e, stackTrace);
+      throw TokenRefreshFailedException('Unexpected error during token refresh', e);
     }
   }
 

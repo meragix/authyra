@@ -1,240 +1,485 @@
 import 'dart:async';
 
-import 'package:authyra/authyra.dart';
 import 'package:authyra/src/core/exceptions.dart';
 import 'package:authyra/src/core/logger.dart';
-import 'package:authyra/src/core/session/multi_account_manager.dart';
+import 'package:authyra/src/core/session/account_manager.dart';
 import 'package:authyra/src/core/session/session_manager.dart';
 import 'package:authyra/src/core/validators.dart';
 import 'package:authyra/src/models/auth_config.dart';
 import 'package:authyra/src/models/auth_session.dart';
+import 'package:authyra/src/models/auth_state.dart';
+import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/providers/auth_provider.dart';
+import 'package:authyra/src/storage/auth_storage.dart';
 
-/// Authyra Authentication Client
+/// Stateless authentication orchestrator — the core of the Authyra framework.
 ///
-/// **Responsibility**: Orchestrate the providers and storage.
+/// [AuthyraClient] manages provider registration, session lifecycle, and token
+/// operations. It has **no global state** and runs on any Dart platform:
+/// Flutter, backend (Shelf / Dart Frog), or CLI.
 ///
-/// This class contains all the authentication business logic,
-/// but maintains NO global state. It is designed to be
-/// used in any context (Flutter, backend, CLI).
+/// For Flutter applications, prefer `AuthyraInstance` which wraps this client
+/// with a singleton, reactive streams, and a simplified initialization API.
 ///
-/// ## Usage
+/// ## Setup
 ///
 /// ```dart
-/// // Dart Backend
 /// final client = AuthyraClient(
-/// providers: [
-///   CredentialsProvider(
-///     id: 'email-login',
-///     authorize: (creds) async {
-///       final response = await myApi.post('/login', data: creds);
-///
-///      if (response.statusCode == 200) {
-///        return AuthUser.fromMap(response.data);
-///      }
-///      return null;
-///    },
-///  ),
-/// ],
-/// storage: RedisAuthStorage(),
+///   providers: [
+///     CredentialsProvider(
+///       id: 'email',
+///       authorize: (creds) async {
+///         final res = await myApi.post('/login', body: creds);
+///         if (res.statusCode != 200) return null;
+///         return AuthUser(id: res.data['userId'], email: res.data['email']);
+///       },
+///     ),
+///     GoogleProvider(clientId: 'YOUR_CLIENT_ID'),
+///   ],
+///   storage: SecureAuthStorage(),
 /// );
 ///
-/// final account = await client.signInWithCredentials(
-///  providerId: 'email-login',
-///  credentials: {
-///    'email': _emailController.text,
-///    'password': _passwordController.text,
-///    'rememberMe': true,
-///  },
-///);
-// ```
+/// await client.initialize();
+/// ```
 ///
-/// ## For Flutter
+/// ## Sign in
 ///
-/// Instead, use `Authyra.instance` which wraps this client
-/// and adds the necessary responsiveness for Flutter.
+/// ```dart
+/// final user = await client.signIn('email', params: {
+///   'email': 'alice@example.com',
+///   'password': 's3cr3t',
+/// });
+/// ```
+///
+/// ## Reactive state
+///
+/// ```dart
+/// client.authStateStream.listen((state) {
+///   if (state.isAuthenticated) navigateToDashboard();
+/// });
+/// ```
+///
+/// ## Multi-account
+///
+/// ```dart
+/// await client.accounts.switchTo(otherUserId);
+/// await client.accounts.signOut(userId);
+/// ```
+///
+/// See also:
+/// - [AuthyraInstance], the singleton wrapper for Flutter apps.
+/// - [AuthProvider], the interface for adding authentication strategies.
+/// - [AuthStorage], the pluggable session persistence backend.
+/// - [AccountManager], the multi-account management API.
 class AuthyraClient with AuthyraLogging {
+  /// Authentication providers registered with this client.
+  ///
+  /// Providers are registered at construction time. Use [registerProvider]
+  /// to add providers dynamically after construction.
   final List<AuthProvider> providers;
 
+  /// Storage backend used to persist sessions across app restarts.
   final AuthStorage storage;
 
-  /// Configuration optionnelle
-  final AuthConfig? config;
+  /// Configuration controlling token lifetime and auto-refresh behaviour.
+  final AuthConfig config;
 
-  final SessionManager sessionManager;
+  // Internal provider registry (id → provider).
+  final Map<String, AuthProvider> _providerMap = {};
 
-  final Map<String, AuthProvider> _providers = {};
+  // Session management layer (created internally).
+  late final SessionManager _sessionManager;
 
-  MultiAccountManager? _multiAccountManager;
+  // Lazy-initialised multi-account facade.
+  AccountManager? _accountManager;
 
+  // Broadcast stream for AuthState changes.
   final _authStateController = StreamController<AuthState>.broadcast();
 
+  bool _initialized = false;
+
+  /// Creates an [AuthyraClient].
+  ///
+  /// Providers are registered immediately from [providers]. Call [initialize]
+  /// before using sign-in or session accessor methods.
+  ///
+  /// Throws [ProviderAlreadyRegisteredException] if two providers share the
+  /// same [AuthProvider.id].
   AuthyraClient({
     required this.providers,
     required this.storage,
-    required this.sessionManager,
-    this.config,
+    this.config = const AuthConfig(),
   }) {
-    sessionManager.addListener(_onSessionChanged);
+    for (final provider in providers) {
+      if (_providerMap.containsKey(provider.id)) {
+        throw ProviderAlreadyRegisteredException(provider.id);
+      }
+      _providerMap[provider.id] = provider;
+    }
+
+    _sessionManager = SessionManager(
+      storage: storage,
+      autoRefresh: config.autoRefresh,
+    );
+    _sessionManager.addListener(_onSessionChanged);
   }
 
-  Future<AuthUser?> signIn(
-    String provider, {
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
+  /// Initialises the client by restoring persisted sessions from [storage].
+  ///
+  /// Must be called and awaited once before [signIn], [signOut], or any
+  /// session accessor. A second call is a no-op.
+  ///
+  /// Throws [StorageException] if the storage backend cannot be started.
+  Future<void> initialize() async {
+    if (_initialized) return;
+    try {
+      logInfo(
+        'Initializing AuthyraClient — providers: '
+        '[${_providerMap.keys.join(', ')}]',
+      );
+      await _sessionManager.initialize();
+      _initialized = true;
+      final count = _sessionManager.accountCount;
+      logInfo(count > 0
+          ? 'AuthyraClient ready — $count account(s) restored'
+          : 'AuthyraClient ready');
+    } catch (e, stackTrace) {
+      logError('Failed to initialize AuthyraClient', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Releases all resources held by this client.
+  ///
+  /// After disposal the client must not be used. When using [AuthyraInstance],
+  /// call its own `dispose()` method instead.
+  Future<void> dispose() async {
+    await _sessionManager.dispose();
+    await _authStateController.close();
+    logDebug('AuthyraClient disposed');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Provider management
+  // ---------------------------------------------------------------------------
+
+  /// Dynamically registers an additional [provider] after construction.
+  ///
+  /// Useful for lazy-loading providers (e.g., only registering an OAuth
+  /// provider when the user taps "Sign in with X").
+  ///
+  /// Throws [InvalidProviderConfigException] if [provider.id] is empty.
+  /// Throws [ProviderAlreadyRegisteredException] if the id is already in use.
+  void registerProvider(AuthProvider provider) {
+    if (provider.id.isEmpty) {
+      throw InvalidProviderConfigException(
+          provider.id, 'Provider id cannot be empty');
+    }
+    if (_providerMap.containsKey(provider.id)) {
+      throw ProviderAlreadyRegisteredException(provider.id);
+    }
+    _providerMap[provider.id] = provider;
+    logInfo('Provider "${provider.id}" registered dynamically');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Authentication
+  // ---------------------------------------------------------------------------
+
+  /// Signs in using the provider identified by [providerId].
+  ///
+  /// [params] is forwarded verbatim to [AuthProvider.signIn]. Expected keys
+  /// depend on the provider type — see [AuthProvider.signIn] for the full
+  /// table.
+  ///
+  /// When the user already has an active session, the profile is updated and
+  /// the account is activated — no duplicate session is created.
+  ///
+  /// Returns the authenticated [AuthUser] on success.
+  ///
+  /// Throws [ProviderNotFoundException] if [providerId] is not registered.
+  /// Throws [AuthenticationFailedException] if the provider rejects the sign-in.
+  ///
+  /// ```dart
+  /// final user = await client.signIn('email', params: {
+  ///   'email': 'alice@example.com',
+  ///   'password': 's3cr3t',
+  /// });
+  /// ```
+  Future<AuthUser> signIn(
+    String providerId, {
     Map<String, dynamic>? params,
   }) async {
-    //final startTime = DateTime.now();
-
+    _assertInitialized();
     try {
-      logInfo('Starting sign in with provider: $provider');
+      logInfo('Sign in started — provider: $providerId');
+      final provider = _findProvider(providerId);
 
-      //final provider = _providers[providerName];
-      final authProvider = providers.firstWhere((p) => p.id == provider);
-      if (authProvider == null) {
-        throw ProviderNotFoundException(provider);
+      AuthValidators.validateSignInParams(providerId, params);
+
+      final result = await provider.signIn(params: params);
+      if (result == null) {
+        throw AuthenticationFailedException(
+          'Provider "$providerId" returned null — credentials may be invalid',
+          providerName: providerId,
+        );
       }
 
-      // Validate sign-in parameters
-      AuthValidators.validateSignInParams(provider, params);
+      final user = result.user;
+      AuthValidators.validateUserData(user.toJson());
 
-      // Attempt sign in with provider
-      logDebug('Calling provider sign in...');
-      final user = await authProvider.signIn(data: params);
-
-      if (user == null) user;
-
-      // Validate user data
-      AuthValidators.validateUserData(user!.toJson());
-
-      // Check for duplicate account
-      final existingSession = await sessionManager.getSession(user.id);
-      if (existingSession != null) {
-        logWarning('User ${user.id} already has an active session');
-        // Update existing session instead
-        await _updateExistingSession(user, provider);
+      // If the user already has a session, update it and switch to it.
+      final existing = await _sessionManager.getSession(user.id);
+      if (existing != null) {
+        logInfo('Existing session found for ${user.id} — refreshing');
+        await _refreshExistingSession(user, result, providerId);
         return user;
       }
 
-      // Create new session
+      // Create a new session from the sign-in result.
       final session = AuthSession(
-        providerId: provider,
+        providerId: providerId,
         user: user,
-        accessToken: params?['accessToken'] as String? ?? '',
-        refreshToken: params?['refreshToken'] as String?,
-        // expiresAt: DateTime.now().add(
-        //   config.tokenRefreshThreshold * 12, // ~1 hour default
-        // ),
-        lastUsedAt: DateTime.now(),
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresAt: result.expiresAt ??
+            DateTime.now().add(config.tokenLifetimeDuration),
         createdAt: DateTime.now(),
+        lastUsedAt: DateTime.now(),
       );
 
-      logDebug('Saving session...');
-      await sessionManager.saveSession(session, setAsActive: true);
-
-      logInfo('Sign in successful for user: ${user.id}');
+      await _sessionManager.saveSession(session, setAsActive: true);
+      logInfo('Sign in successful — user: ${user.id}');
       _emitAuthState(AuthState.authenticated(user));
-
       return user;
     } on AuthyraException catch (e) {
       logError('Sign in failed', e);
+      _emitAuthState(AuthState.error(e.message));
       rethrow;
     } catch (e, stackTrace) {
-      logError('Sign in failed', e, stackTrace);
+      logError('Sign in failed unexpectedly', e, stackTrace);
       _emitAuthState(AuthState.error(e.toString()));
       throw AuthyraErrorHandler.handleError(e, stackTrace);
     }
   }
 
-  /// The client must expose a specific method for credentials,
-  /// because unlike OAuth, the data comes from the UI (the form).
-  Future<AuthUser?> signInWithCredentials({
-    required String providerId,
-    required Map<String, dynamic> credentials,
-  }) async {
-    // 1. Trouver le provider
-    final provider = _providers[providerId];
-    if (provider == null) {
-      throw ProviderNotFoundException(providerId);
-    }
-
-    // 2. Appeler la logique d'autorisation
-    final user = await provider.signIn(data: credentials);
-
-    if (user != null) {
-      // Check for duplicate account
-      final existingSession = await sessionManager.getSession(user.id);
-      if (existingSession != null) {
-        logWarning('User ${user.id} already has an active session');
-        // Update existing session instead
-        await _updateExistingSession(user, providerId);
-        return user;
+  /// Signs out the currently active account.
+  ///
+  /// If other accounts are registered, the most recently used one is
+  /// automatically elected as active. If no accounts remain, the state
+  /// transitions to [AuthState.unauthenticated].
+  ///
+  /// When the active provider has [AuthProvider.supportsSignOut] `true`,
+  /// [AuthProvider.signOut] is called first to revoke server-side tokens.
+  /// A failure there is logged but does NOT block the local sign-out.
+  ///
+  /// Throws [SessionOperationException] on local storage failure.
+  Future<void> signOut() async {
+    _assertInitialized();
+    try {
+      logInfo('Sign out started');
+      final session = await _sessionManager.getActiveSession();
+      if (session == null) {
+        logDebug('No active session — sign out is a no-op');
+        return;
       }
 
-      // Create new session
-      final session = AuthSession(
-        providerId: providerId,
-        user: user,
-        accessToken: '',
-        lastUsedAt: DateTime.now(),
-        createdAt: DateTime.now(),
-      );
+      // Attempt server-side token revocation.
+      final provider = _providerMap[session.providerId];
+      if (provider != null && provider.supportsSignOut) {
+        try {
+          await provider.signOut(userId: session.user.id);
+        } catch (e) {
+          logWarning(
+            'Provider sign-out failed for "${session.providerId}" — '
+            'continuing with local session removal',
+          );
+        }
+      }
 
-      logDebug('Saving session...');
-      await sessionManager.saveSession(session, setAsActive: true);
+      await _sessionManager.clearActiveSession();
+      logInfo('Signed out — user: ${session.user.id}');
 
-      logInfo('Sign in successful for user: ${user.id}');
-      _emitAuthState(AuthState.authenticated(user));
-    }
-
-    return user;
-  }
-
-  Future<void> signOut() async {
-    try {
-      logInfo('Signing out...');
-      throw UnimplementedError();
+      final next = _sessionManager.activeSession;
+      _emitAuthState(next != null
+          ? AuthState.authenticated(next.user)
+          : AuthState.unauthenticated());
     } catch (e, stackTrace) {
-      logError('Sign in failed', e, stackTrace);
-
+      logError('Sign out failed', e, stackTrace);
       throw AuthyraErrorHandler.handleError(e, stackTrace);
     }
   }
 
-  Future<AuthUser?> refreshToken(String refreshToken) {
-    throw UnimplementedError();
-  }
-
-  /// Validate a JWT token
+  /// Silently refreshes the active session's access token.
   ///
-  /// Useful for backend middleware
-  Future<AuthUser?> validateToken(String token) async {
-    /// Decode and verify the token
-    /// Return the associated account if valid
-    // TODO: Implement with jwt_decoder
-    throw UnimplementedError('validateToken not implemented yet');
+  /// Delegates to [AuthProvider.refreshToken] for the active session's
+  /// provider. On success the session is updated with new tokens. On failure
+  /// (expired or invalid refresh token) the session is removed and
+  /// [AuthState.unauthenticated] is emitted.
+  ///
+  /// Returns `true` when the refresh succeeded, `false` when the provider
+  /// does not support refresh or no refresh token is available.
+  ///
+  /// Throws [SessionNotFoundException] when there is no active session.
+  Future<bool> refreshSession() async {
+    _assertInitialized();
+    try {
+      final session = await _sessionManager.getActiveSession();
+      if (session == null) throw SessionNotFoundException();
+
+      final provider = _findProvider(session.providerId);
+      if (!provider.supportsRefresh) {
+        logDebug('Provider "${session.providerId}" does not support refresh');
+        return false;
+      }
+      if (session.refreshToken == null) {
+        logWarning('No refresh token for user: ${session.user.id}');
+        return false;
+      }
+
+      logInfo('Refreshing session — user: ${session.user.id}');
+      final result = await provider.refreshToken(session.refreshToken!);
+
+      if (result == null) {
+        logWarning(
+          'Refresh returned null — forcing re-auth for user: ${session.user.id}',
+        );
+        await _sessionManager.clearActiveSession();
+        _emitAuthState(AuthState.unauthenticated());
+        return false;
+      }
+
+      final refreshed = session.refreshed(
+        newAccessToken: result.accessToken,
+        newRefreshToken: result.refreshToken,
+        newExpiresAt: result.expiresAt,
+      );
+
+      await _sessionManager.updateSession(session.user.id, refreshed);
+      logInfo('Session refreshed — user: ${session.user.id}');
+      return true;
+    } on AuthyraException {
+      rethrow;
+    } catch (e, stackTrace) {
+      logError('Session refresh failed', e, stackTrace);
+      throw AuthyraErrorHandler.handleError(e, stackTrace);
+    }
   }
 
-  // ==========================================
-  // Internal Methods
-  // ==========================================
+  // ---------------------------------------------------------------------------
+  // Session accessors
+  // ---------------------------------------------------------------------------
 
-  Future<void> _updateExistingSession(
+  /// Returns the currently active [AuthUser], or `null` if not signed in.
+  Future<AuthUser?> getUser() async => (await getSession())?.user;
+
+  /// Returns the currently active [AuthSession], or `null`.
+  ///
+  /// Throws [TokenExpiredException] when the session exists but has expired.
+  Future<AuthSession?> getSession() => _sessionManager.getActiveSession();
+
+  /// Returns the active access token, or `null`.
+  ///
+  /// Throws [TokenExpiredException] when the session is expired.
+  Future<String?> getAccessToken() => _sessionManager.getAccessToken();
+
+  /// Returns `true` when there is an active, non-expired session.
+  Future<bool> isAuthenticated() async {
+    try {
+      final session = await getSession();
+      return session != null && !session.isExpired;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Streams
+  // ---------------------------------------------------------------------------
+
+  /// Broadcast stream of raw [AuthSession] changes.
+  ///
+  /// Emits `null` when no account is active. Prefer [authStateStream] for
+  /// reactive UI consumption.
+  Stream<AuthSession?> get sessionStream => _sessionManager.sessionStream;
+
+  /// Broadcast stream of [AuthState] changes.
+  ///
+  /// Because [AuthState] extends [Equatable], identical consecutive states are
+  /// deduplicated — no spurious rebuilds.
+  ///
+  /// ```dart
+  /// client.authStateStream.listen((state) {
+  ///   switch (state.type) {
+  ///     case AuthStateType.authenticated:   showDashboard(state.user!);
+  ///     case AuthStateType.unauthenticated: showLoginPage();
+  ///     case AuthStateType.error:           showError(state.error!);
+  ///   }
+  /// });
+  /// ```
+  Stream<AuthState> get authStateStream => _authStateController.stream;
+
+  // ---------------------------------------------------------------------------
+  // Multi-account
+  // ---------------------------------------------------------------------------
+
+  /// Multi-account management API — lazily initialised on first access.
+  ///
+  /// ```dart
+  /// final users = await client.accounts.getAll();
+  /// await client.accounts.switchTo(userId);
+  /// await client.accounts.signOut(userId);
+  /// await client.accounts.signOutAll();
+  /// ```
+  AccountManager get accounts {
+    return _accountManager ??= AccountManager(
+      sessionManager: _sessionManager,
+      onStateChange: _emitAuthState,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /// Updates and activates an existing session after a repeated sign-in.
+  Future<void> _refreshExistingSession(
     AuthUser user,
-    String providerName,
+    AuthSignInResult result,
+    String providerId,
   ) async {
-    final existingSession = await sessionManager.getSession(user.id);
-    if (existingSession == null) return;
+    final existing = await _sessionManager.getSession(user.id);
+    if (existing == null) return;
 
-    final updatedSession = existingSession.copyWith(user: user);
-    await sessionManager.updateSession(user.id, updatedSession);
-    await sessionManager.switchAccount(user.id);
+    final updated = existing.copyWith(
+      user: user,
+      accessToken: result.accessToken ?? existing.accessToken,
+      refreshToken: result.refreshToken ?? existing.refreshToken,
+      expiresAt: result.expiresAt ?? existing.expiresAt,
+    );
 
-    logInfo('Updated and switched to existing session: ${user.id}');
+    await _sessionManager.updateSession(user.id, updated);
+    await _sessionManager.switchAccount(user.id);
+    _emitAuthState(AuthState.authenticated(user));
+    logInfo('Existing session updated and activated: ${user.id}');
   }
 
+  /// Returns the provider for [id] or throws [ProviderNotFoundException].
+  AuthProvider _findProvider(String id) {
+    final provider = _providerMap[id];
+    if (provider == null) throw ProviderNotFoundException(id);
+    return provider;
+  }
+
+  /// Maps raw [SessionManager] callbacks to [AuthState] emissions.
   void _onSessionChanged(AuthSession? session) {
     if (session != null) {
       _emitAuthState(AuthState.authenticated(session.user));
-    } else if (sessionManager.accountCount == 0) {
+    } else if (_sessionManager.accountCount == 0) {
       _emitAuthState(AuthState.unauthenticated());
     }
   }
@@ -245,17 +490,7 @@ class AuthyraClient with AuthyraLogging {
     }
   }
 
-  AuthProvider _findProvider(String providerId) {
-    try {
-      return providers.firstWhere((p) => p.id == providerId);
-    } catch (e) {
-      throw ProviderNotFoundException(providerId);
-    }
-  }
-
-  Future<void> dispose() async {
-    await sessionManager.dispose();
-    await _authStateController.close();
-    logDebug('Authyra disposed');
+  void _assertInitialized() {
+    if (!_initialized) throw NotInitializedException();
   }
 }
