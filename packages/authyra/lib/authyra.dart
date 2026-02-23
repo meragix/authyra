@@ -35,6 +35,7 @@ export 'src/providers/auth_provider.dart'
 // ---------------------------------------------------------------------------
 export 'src/providers/credentials/credentials_provider.dart';
 export 'src/providers/oauth2/oauth2_provider.dart';
+export 'src/providers/oauth2/prebuilt/apple.dart';
 export 'src/providers/oauth2/prebuilt/google.dart';
 export 'src/providers/oauth2/prebuilt/github.dart';
 export 'src/providers/proxy_oauth/proxy_oauth_config.dart'
@@ -51,6 +52,11 @@ export 'src/storage/auth_storage.dart';
 // OAuth2 callback helper
 // ---------------------------------------------------------------------------
 export 'src/providers/oauth2/oauth2_callback_handle.dart';
+
+// ---------------------------------------------------------------------------
+// JWT utilities
+// ---------------------------------------------------------------------------
+export 'src/providers/helpers/jwt_utils.dart';
 
 // ---------------------------------------------------------------------------
 // Convenience alias

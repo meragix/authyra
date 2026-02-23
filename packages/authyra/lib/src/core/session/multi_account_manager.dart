@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use_from_same_package
+
 /// Backward-compatibility re-export.
 ///
 /// [MultiAccountManager] has been renamed to [AccountManager] and lives in
