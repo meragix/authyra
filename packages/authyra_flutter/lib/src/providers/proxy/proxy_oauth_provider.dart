@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:authyra/authyra.dart';
+import 'package:authyra/logging.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 

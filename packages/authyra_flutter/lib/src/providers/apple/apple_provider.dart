@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:authyra/authyra.dart';
 import 'package:authyra/logging.dart';
+import 'package:authyra_flutter/src/utils/jwt_utils.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';

@@ -1,4 +1,4 @@
-import 'package:authyra/authyra.dart';
+import 'package:authyra/logging.dart';
 import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 
 /// Global deep-link router for [OAuth2Provider] instances.
