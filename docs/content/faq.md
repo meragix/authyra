@@ -1,118 +1,252 @@
 ---
 title: FAQ
-# description: Text, title, and styling in standard markdown.
+description: Frequently asked questions about Authyra.
+seo:
+  title: FAQ | Authyra
+  description: Answers to common questions about Authyra's design, scope, and usage.
 ---
-
 
 ## General
 
 ### What is Authyra?
 
-Authyra is a pure authentication logic framework for Flutter and Dart. It handles authentication state, session management, and provider orchestration while remaining completely agnostic to your navigation and UI choices.
+Authyra is a pure authentication logic framework for Dart and Flutter. It handles authentication state, session management, and provider orchestration while remaining completely agnostic to your navigation and UI choices.
 
-### Why not use Firebase Auth / Supabase Auth?
+The core `authyra` package has no Flutter dependency and runs identically on mobile, web, desktop, backend (Shelf, Dart Frog), and CLI tools.
 
-You can! Authyra can work alongside or integrate with these services. The difference is:
+---
 
-- **Firebase/Supabase**: Full backend service (auth + database + storage)
-- **Authyra**: Just the auth logic layer (bring your own backend)
+### Why not use Firebase Auth or Supabase Auth?
 
-Use Authyra when:
+You can — Authyra doesn't compete with BaaS platforms. The difference is:
 
-- You have your own backend API
-- You want full control over auth logic
-- You need to support multiple auth providers
-- You want navigation-agnostic auth
+| Aspect             | Firebase / Supabase      | Authyra                        |
+| ------------------ | ------------------------ | ------------------------------ |
+| Backend            | Managed service          | Bring your own                 |
+| Auth logic         | In the SDK               | In your app (you own it)       |
+| Navigation control | Opinionated              | Fully decoupled                |
+| Multi-platform     | Flutter + limited Dart   | Any Dart platform              |
+
+Use Authyra when you have your own backend, want full control, or need to run the same auth logic on both a Flutter app and a Dart backend.
+
+---
 
 ### Is Authyra production-ready?
 
-v0.1.0 is an **MVP release**. It's functional but we recommend:
+v0.1.0 is an **MVP release**. The API is stable for the core features but the test suite is still being expanded. We recommend:
 
-- ✅ Using it in side projects
-- ✅ Testing thoroughly
-- ⚠️ Waiting for v1.0.0 for mission-critical production apps
+- Using it in new projects and side projects now.
+- Waiting for v1.0.0 (targeting ≥ 90% test coverage) for mission-critical production systems.
+
+---
 
 ### Does Authyra work offline?
 
-Yes! Session state is cached in memory and persisted to storage. Your app can:
+Session state is cached in memory and persisted to `AuthStorage`. Your app can:
 
-- Check auth status offline
-- Navigate based on cached auth state
-- Queue auth actions (sign in/out) when offline (coming in v0.4.0)
+- Read `Authyra.instance.isAuthenticated` and `currentUser` offline — no network call required.
+- React to cached state immediately on startup, before any network request.
+
+---
 
 ## Technical
 
-### Why two packages?
+### Why two packages? (core vs Flutter)
 
-**authyra** (pure Dart):
+**`authyra`** (pure Dart, v0.1.0 — current):
 
-- No Flutter dependency
-- Works on backend, CLI, scripts
-- Faster tests
-- Smaller bundle size
+- Zero Flutter dependency.
+- Works on backend, CLI, scripts.
+- `dart test` runs without a Flutter device.
+- Smaller pub.dev bundle.
 
-**flutter_authyra** (Flutter widgets):
+**`flutter_authyra`** (Flutter, planned v0.3.0):
 
-- UI components
-- BuildContext extensions
-- Flutter-specific integrations
+- `AuthyraScope` — InheritedWidget for widget tree propagation.
+- `AuthBuilder` — reactive builder widget.
+- `AuthGuard` — declarative route protection.
+- `BuildContext` extensions.
+- GoRouter / AutoRoute helpers.
 
-This separation allows Authyra to work everywhere while keeping Flutter-specific code optional.
+This separation keeps the authentication core clean and reusable while the Flutter layer remains purely additive.
+
+---
 
 ### Can I use Authyra without Flutter?
 
-Yes! Use the `authyra` package:
+Yes. Just add `authyra` (not `flutter_authyra`):
 
 ```yaml
 dependencies:
-  authyra: ^0.1.0  # Pure Dart, no Flutter
+  authyra: ^0.1.0
 ```
 
-Perfect for:
+Works in:
 
-- Backend APIs (Shelf, Dart Frog)
+- Dart backend services (Shelf, Dart Frog)
 - CLI tools
 - Scripts
-- Testing
+- Unit tests
+
+---
 
 ### Does Authyra support multi-account?
 
-Yes! v0.1.0 has basic multi-account support. Full implementation in v0.2.0.
+Yes — `AccountManager` ships in the core (`authyra` package):
 
 ```dart
-// Switch between accounts
-await Authyra.instance.switchAccount(account);
+final mgr = Authyra.instance.accounts;
 
-// Get all accounts
-final accounts = Authyra.instance.allAccounts;
+// All signed-in accounts, sorted by last activity
+final users = await mgr.getAll();
+
+// Activate a different account
+await mgr.switchTo(userId);
+
+// Sign out one account, keep others active
+await mgr.signOut(userId);
+
+// Sign out every account
+await mgr.signOutAll();
+
+// Prune expired sessions
+await mgr.cleanExpired();
 ```
+
+The number of concurrent accounts is capped by `AuthConfig.maxAccounts` (default: 5).
+
+---
 
 ### Can I use my own state management?
 
-Absolutely! Authyra is state management agnostic.
+Authyra is completely state-management-agnostic. The `authStateChanges` stream plugs into anything:
 
-**With Riverpod**:
+**Riverpod**:
 
 ```dart
-final authProvider = StreamProvider<AuthAccount?>((ref) {
-  return Authyra.instance.onAccountChanged;
+final authStateProvider = StreamProvider<AuthState>((ref) {
+  return Authyra.instance.authStateChanges;
 });
+
+// In a widget:
+final state = ref.watch(authStateProvider).value;
 ```
 
-**With Bloc**:
+**Bloc / Cubit**:
 
 ```dart
-class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  final StreamSubscription _subscription;
-  
-  AuthBloc() : super(AuthInitial()) {
-    _subscription = Authyra.instance.onAccountChanged.listen((account) {
-      add(AuthChanged(account));
-    });
+class AuthCubit extends Cubit<AuthState> {
+  late final StreamSubscription<AuthState> _sub;
+
+  AuthCubit() : super(AuthState.unauthenticated()) {
+    _sub = Authyra.instance.authStateChanges.listen(emit);
+  }
+
+  @override
+  Future<void> close() {
+    _sub.cancel();
+    return super.close();
   }
 }
 ```
 
+**GoRouter**:
+
+```dart
+GoRouter(
+  refreshListenable: StreamToListenable(Authyra.instance.authStateChanges),
+  redirect: (context, state) {
+    if (!Authyra.instance.isAuthenticated) return '/login';
+    return null;
+  },
+);
+```
+
+---
+
 ### How do I test code that uses Authyra?
 
-Use `AuthyraClient` directly in tests (no singleton):
+Use `AuthyraClient` directly — no singleton, no `Authyra.initialize()` required:
+
+```dart
+import 'package:test/test.dart';
+import 'package:authyra/authyra.dart';
+
+void main() {
+  late AuthyraClient client;
+
+  setUp(() async {
+    client = AuthyraClient(
+      providers: [
+        CredentialsProvider(
+          id: 'email',
+          authorize: (creds) async {
+            if (creds?['password'] == 'secret') {
+              return AuthUser(id: '1', email: creds!['email'] as String);
+            }
+            return null;
+          },
+        ),
+      ],
+      storage: InMemoryAuthStorage(),
+    );
+    await client.initialize();
+  });
+
+  test('sign in succeeds with correct password', () async {
+    final user = await client.signIn('email', params: {
+      'email':    'alice@example.com',
+      'password': 'secret',
+    });
+    expect(user.email, equals('alice@example.com'));
+  });
+
+  test('sign in fails with wrong password', () async {
+    expect(
+      () => client.signIn('email', params: {
+        'email':    'alice@example.com',
+        'password': 'wrong',
+      }),
+      throwsA(isA<AuthenticationFailedException>()),
+    );
+  });
+}
+```
+
+If your test code uses `Authyra.instance`, call `dispose()` in `tearDown` to reset the singleton between tests:
+
+```dart
+tearDown(() async {
+  if (Authyra.isInitialized) {
+    await Authyra.instance.dispose();
+  }
+});
+```
+
+---
+
+### What storage backend should I use?
+
+| Runtime         | Recommended                                          |
+| --------------- | ---------------------------------------------------- |
+| Tests / dev     | `InMemoryAuthStorage` (bundled with `authyra`)       |
+| Flutter mobile  | `flutter_secure_storage` (Keychain / Keystore)       |
+| Flutter web     | `flutter_secure_storage` with web options            |
+| Dart CLI        | Encrypted file or OS keyring                         |
+| Backend / Shelf | Redis, encrypted DB column, or a secrets manager     |
+
+Never store tokens in `SharedPreferences` or browser `localStorage` — they are not encrypted.
+
+---
+
+### How does token refresh work?
+
+When `AuthyraClient.refreshSession()` is called (manually or triggered by an API 401):
+
+1. The active `AuthSession` is retrieved.
+2. If `session.shouldRefresh` is `true` (token expires within `AuthConfig.refreshBeforeExpiry`), the client calls `provider.refreshToken(session.refreshToken)`.
+3. The provider returns `AuthTokenResult` with the new `accessToken` (and optionally a new `refreshToken`).
+4. The session is updated in `SessionManager` and re-persisted to storage.
+5. `authStateChanges` emits the refreshed `AuthState.authenticated`.
+
+If the refresh token is itself expired or invalid, `refreshToken` returns `null`, the session is cleared, and `AuthState.unauthenticated()` is emitted.
