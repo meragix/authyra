@@ -1,16 +1,16 @@
 import 'dart:async';
 
-import 'package:authyra/src/core/exceptions.dart';
-import 'package:authyra/src/core/logger.dart';
-import 'package:authyra/src/core/session/account_manager.dart';
-import 'package:authyra/src/core/session/session_manager.dart';
+import 'package:authyra/src/exceptions/auth_exceptions.dart';
+import 'package:authyra/src/internal/logger.dart';
+import 'package:authyra/src/session/account_manager.dart';
+import 'package:authyra/src/session/session_manager.dart';
 import 'package:authyra/src/core/validators.dart';
 import 'package:authyra/src/models/auth_config.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_state.dart';
 import 'package:authyra/src/models/auth_user.dart';
-import 'package:authyra/src/providers/auth_provider.dart';
-import 'package:authyra/src/storage/auth_storage.dart';
+import 'package:authyra/src/interfaces/auth_provider.dart';
+import 'package:authyra/src/interfaces/auth_storage.dart';
 
 /// Stateless authentication orchestrator — the core of the Authyra framework.
 ///
@@ -256,7 +256,7 @@ class AuthyraClient with AuthyraLogging {
       logInfo('Sign in successful — user: ${user.id}');
       _emitAuthState(AuthState.authenticated(user));
       return user;
-    } on AuthyraException catch (e) {
+    } on AuthException catch (e) {
       logError('Sign in failed', e);
       _emitAuthState(AuthState.error(e.message));
       rethrow;
@@ -362,7 +362,7 @@ class AuthyraClient with AuthyraLogging {
       await _sessionManager.updateSession(session.user.id, refreshed);
       logInfo('Session refreshed — user: ${session.user.id}');
       return true;
-    } on AuthyraException {
+    } on AuthException {
       rethrow;
     } catch (e, stackTrace) {
       logError('Session refresh failed', e, stackTrace);

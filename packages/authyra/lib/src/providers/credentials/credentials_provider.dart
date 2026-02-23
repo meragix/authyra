@@ -1,6 +1,6 @@
-import 'package:authyra/src/core/logger.dart';
+import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/models/auth_user.dart';
-import 'package:authyra/src/providers/auth_provider.dart';
+import 'package:authyra/src/interfaces/auth_provider.dart';
 
 /// Callback that validates credentials and returns the authenticated user.
 ///

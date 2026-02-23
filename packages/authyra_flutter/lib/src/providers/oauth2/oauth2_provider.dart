@@ -2,10 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:authyra/src/core/exceptions.dart';
-import 'package:authyra/src/core/logger.dart';
-import 'package:authyra/src/providers/auth_provider.dart';
-import 'package:authyra/src/providers/oauth2/oauth2_config.dart';
+import 'package:authyra/authyra.dart';
+import 'package:authyra_flutter/src/providers/oauth2/oauth2_config.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -227,7 +225,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
         refreshToken: tokens['refresh_token'],
         expiresAt: expiresAt,
       );
-    } on AuthyraException {
+    } on AuthException {
       rethrow;
     } catch (e, stackTrace) {
       logError('OAuth2 sign in failed', e, stackTrace);
@@ -487,7 +485,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
         config.timeout,
         onTimeout: () => throw AuthenticationCancelledException(id),
       );
-    } on AuthyraException {
+    } on AuthException {
       rethrow;
     } catch (e) {
       throw AuthenticationFailedException(

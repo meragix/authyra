@@ -174,7 +174,7 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
 
       // Step 4: Exchange the backend token for user info + session credentials.
       return await _exchangeToken(callbackUri);
-    } on AuthyraException {
+    } on AuthException {
       rethrow;
     } catch (e, stackTrace) {
       logError('Backend OAuth sign in failed for $id', e, stackTrace);

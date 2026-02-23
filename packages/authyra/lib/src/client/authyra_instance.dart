@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:authyra/src/core/authyra_client.dart';
-import 'package:authyra/src/core/exceptions.dart';
-import 'package:authyra/src/core/logger.dart';
-import 'package:authyra/src/core/session/account_manager.dart';
+import 'package:authyra/src/client/authyra_client.dart';
+import 'package:authyra/src/exceptions/auth_exceptions.dart';
+import 'package:authyra/src/internal/logger.dart';
+import 'package:authyra/src/session/account_manager.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_state.dart';
 import 'package:authyra/src/models/auth_user.dart';

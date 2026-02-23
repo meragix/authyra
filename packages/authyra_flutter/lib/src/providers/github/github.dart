@@ -1,6 +1,6 @@
-import 'package:authyra/src/models/auth_user.dart';
-import 'package:authyra/src/providers/oauth2/oauth2_config.dart';
-import 'package:authyra/src/providers/oauth2/oauth2_provider.dart';
+import 'package:authyra/authyra.dart';
+import 'package:authyra_flutter/src/providers/oauth2/oauth2_config.dart';
+import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 
 /// Prebuilt [OAuth2Provider] for GitHub OAuth Apps.
 ///

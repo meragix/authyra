@@ -1,11 +1,11 @@
 /// Base exception class for all Authyra errors
-class AuthyraException implements Exception {
+class AuthException implements Exception {
   final String message;
   final String? code;
   final dynamic originalError;
   final StackTrace? stackTrace;
 
-  AuthyraException(
+  AuthException(
     this.message, {
     this.code,
     this.originalError,
@@ -14,7 +14,7 @@ class AuthyraException implements Exception {
 
   @override
   String toString() {
-    final buffer = StringBuffer('AuthyraException: $message');
+    final buffer = StringBuffer('AuthException: $message');
     if (code != null) buffer.write(' (code: $code)');
     if (originalError != null) buffer.write('\nCaused by: $originalError');
     return buffer.toString();
@@ -34,7 +34,7 @@ class AuthyraException implements Exception {
 // ==========================================
 
 /// Thrown when Authyra is used before initialization
-class NotInitializedException extends AuthyraException {
+class NotInitializedException extends AuthException {
   NotInitializedException()
       : super(
           'Authyra has not been initialized. Call Authyra.initialize() first.',
@@ -43,8 +43,8 @@ class NotInitializedException extends AuthyraException {
 }
 
 /// Thrown when configuration is invalid
-class InvalidConfigurationException extends AuthyraException {
-  InvalidConfigurationException(String message) : super(message, code: 'INVALID_CONFIG');
+class InvalidConfigurationException extends AuthException {
+  InvalidConfigurationException(super.message) : super(code: 'INVALID_CONFIG');
 }
 
 // ==========================================
@@ -52,7 +52,7 @@ class InvalidConfigurationException extends AuthyraException {
 // ==========================================
 
 /// Thrown when a requested provider is not registered
-class ProviderNotFoundException extends AuthyraException {
+class ProviderNotFoundException extends AuthException {
   final String providerName;
 
   ProviderNotFoundException(this.providerName)
@@ -64,7 +64,7 @@ class ProviderNotFoundException extends AuthyraException {
 }
 
 /// Thrown when a provider is already registered
-class ProviderAlreadyRegisteredException extends AuthyraException {
+class ProviderAlreadyRegisteredException extends AuthException {
   final String providerName;
 
   ProviderAlreadyRegisteredException(this.providerName)
@@ -75,7 +75,7 @@ class ProviderAlreadyRegisteredException extends AuthyraException {
 }
 
 /// Thrown when provider configuration is invalid
-class InvalidProviderConfigException extends AuthyraException {
+class InvalidProviderConfigException extends AuthException {
   final String providerName;
 
   InvalidProviderConfigException(this.providerName, String details)
@@ -90,7 +90,7 @@ class InvalidProviderConfigException extends AuthyraException {
 // ==========================================
 
 /// Thrown when authentication is cancelled by the user
-class AuthenticationCancelledException extends AuthyraException {
+class AuthenticationCancelledException extends AuthException {
   final String? providerName;
 
   AuthenticationCancelledException([this.providerName])
@@ -102,7 +102,7 @@ class AuthenticationCancelledException extends AuthyraException {
 }
 
 /// Thrown when authentication fails
-class AuthenticationFailedException extends AuthyraException {
+class AuthenticationFailedException extends AuthException {
   final String? providerName;
 
   AuthenticationFailedException(
@@ -117,7 +117,7 @@ class AuthenticationFailedException extends AuthyraException {
 }
 
 /// Thrown when credentials are invalid
-class InvalidCredentialsException extends AuthyraException {
+class InvalidCredentialsException extends AuthException {
   InvalidCredentialsException([String? details])
       : super(
           'Invalid credentials${details != null ? ': $details' : ''}',
@@ -126,7 +126,7 @@ class InvalidCredentialsException extends AuthyraException {
 }
 
 /// Thrown when required authentication parameters are missing
-class MissingAuthParametersException extends AuthyraException {
+class MissingAuthParametersException extends AuthException {
   final List<String> missingParams;
 
   MissingAuthParametersException(this.missingParams)
@@ -141,7 +141,7 @@ class MissingAuthParametersException extends AuthyraException {
 // ==========================================
 
 /// Thrown when access token has expired
-class TokenExpiredException extends AuthyraException {
+class TokenExpiredException extends AuthException {
   TokenExpiredException([String? details])
       : super(
           'Access token has expired${details != null ? ': $details' : ''}',
@@ -150,7 +150,7 @@ class TokenExpiredException extends AuthyraException {
 }
 
 /// Thrown when token refresh fails
-class TokenRefreshFailedException extends AuthyraException {
+class TokenRefreshFailedException extends AuthException {
   TokenRefreshFailedException([String? reason, dynamic originalError])
       : super(
           'Failed to refresh access token${reason != null ? ': $reason' : ''}',
@@ -160,7 +160,7 @@ class TokenRefreshFailedException extends AuthyraException {
 }
 
 /// Thrown when token is invalid or malformed
-class InvalidTokenException extends AuthyraException {
+class InvalidTokenException extends AuthException {
   InvalidTokenException([String? details])
       : super(
           'Invalid or malformed token${details != null ? ': $details' : ''}',
@@ -169,7 +169,7 @@ class InvalidTokenException extends AuthyraException {
 }
 
 /// Thrown when session is not found
-class SessionNotFoundException extends AuthyraException {
+class SessionNotFoundException extends AuthException {
   SessionNotFoundException()
       : super(
           'No active session found. Please sign in first.',
@@ -178,7 +178,7 @@ class SessionNotFoundException extends AuthyraException {
 }
 
 /// Thrown when session operations fail
-class SessionOperationException extends AuthyraException {
+class SessionOperationException extends AuthException {
   SessionOperationException(String operation, [dynamic originalError])
       : super(
           'Session operation failed: $operation',
@@ -192,7 +192,7 @@ class SessionOperationException extends AuthyraException {
 // ==========================================
 
 /// Thrown when storage operations fail
-class StorageException extends AuthyraException {
+class StorageException extends AuthException {
   final String operation;
 
   StorageException(this.operation, [dynamic originalError])
@@ -204,7 +204,7 @@ class StorageException extends AuthyraException {
 }
 
 /// Thrown when storage is not initialized
-class StorageNotInitializedException extends AuthyraException {
+class StorageNotInitializedException extends AuthException {
   StorageNotInitializedException()
       : super(
           'Storage has not been initialized. Call initialize() first.',
@@ -213,7 +213,7 @@ class StorageNotInitializedException extends AuthyraException {
 }
 
 /// Thrown when stored data is corrupted
-class CorruptedDataException extends AuthyraException {
+class CorruptedDataException extends AuthException {
   final String key;
 
   CorruptedDataException(this.key, [dynamic originalError])
@@ -229,7 +229,7 @@ class CorruptedDataException extends AuthyraException {
 // ==========================================
 
 /// Thrown when network operations fail
-class NetworkException extends AuthyraException {
+class NetworkException extends AuthException {
   final int? statusCode;
   final String? url;
 
@@ -248,7 +248,7 @@ class NetworkException extends AuthyraException {
 }
 
 /// Thrown when request times out
-class TimeoutException extends AuthyraException {
+class TimeoutException extends AuthException {
   final Duration timeout;
 
   TimeoutException(this.timeout)
@@ -259,7 +259,7 @@ class TimeoutException extends AuthyraException {
 }
 
 /// Thrown when there's no internet connection
-class NoInternetException extends AuthyraException {
+class NoInternetException extends AuthException {
   NoInternetException()
       : super(
           'No internet connection available',
@@ -272,7 +272,7 @@ class NoInternetException extends AuthyraException {
 // ==========================================
 
 /// Thrown when input validation fails
-class ValidationException extends AuthyraException {
+class ValidationException extends AuthException {
   final String field;
 
   ValidationException(this.field, String reason)
@@ -297,7 +297,7 @@ class InvalidPasswordException extends ValidationException {
 // ==========================================
 
 /// Thrown when account is not found
-class AccountNotFoundException extends AuthyraException {
+class AccountNotFoundException extends AuthException {
   final String accountId;
 
   AccountNotFoundException(this.accountId)
@@ -308,7 +308,7 @@ class AccountNotFoundException extends AuthyraException {
 }
 
 /// Thrown when trying to add a duplicate account
-class DuplicateAccountException extends AuthyraException {
+class DuplicateAccountException extends AuthException {
   final String accountId;
 
   DuplicateAccountException(this.accountId)
@@ -323,7 +323,7 @@ class DuplicateAccountException extends AuthyraException {
 // ==========================================
 
 /// Thrown when backend sync operations fail
-class BackendSyncException extends AuthyraException {
+class BackendSyncException extends AuthException {
   final String operation;
 
   BackendSyncException(this.operation, [dynamic originalError])
@@ -339,7 +339,7 @@ class BackendSyncException extends AuthyraException {
 // ==========================================
 
 /// Thrown when platform-specific operation fails
-class PlatformException extends AuthyraException {
+class PlatformException extends AuthException {
   final String platform;
 
   PlatformException(this.platform, String message, [dynamic originalError])
@@ -351,7 +351,7 @@ class PlatformException extends AuthyraException {
 }
 
 /// Thrown when feature is not supported on current platform
-class UnsupportedPlatformException extends AuthyraException {
+class UnsupportedPlatformException extends AuthException {
   final String feature;
   final String platform;
 
@@ -368,9 +368,9 @@ class UnsupportedPlatformException extends AuthyraException {
 
 /// Utility class to handle and categorize errors
 class AuthyraErrorHandler {
-  /// Convert any error to AuthyraException
-  static AuthyraException handleError(dynamic error, [StackTrace? stackTrace]) {
-    if (error is AuthyraException) {
+  /// Convert any error to AuthException
+  static AuthException handleError(dynamic error, [StackTrace? stackTrace]) {
+    if (error is AuthException) {
       return error;
     }
 
@@ -400,7 +400,7 @@ class AuthyraErrorHandler {
     }
 
     // Generic error
-    return AuthyraException(
+    return AuthException(
       'An unexpected error occurred',
       code: 'UNKNOWN_ERROR',
       originalError: error,
@@ -409,7 +409,7 @@ class AuthyraErrorHandler {
   }
 
   /// Check if error is recoverable
-  static bool isRecoverable(AuthyraException exception) {
+  static bool isRecoverable(AuthException exception) {
     return exception is NetworkException ||
         exception is TimeoutException ||
         exception is NoInternetException ||
@@ -417,7 +417,7 @@ class AuthyraErrorHandler {
   }
 
   /// Get user-friendly error message
-  static String getUserMessage(AuthyraException exception) {
+  static String getUserMessage(AuthException exception) {
     if (exception is NoInternetException) {
       return 'No internet connection. Please check your network and try again.';
     }
@@ -461,7 +461,7 @@ class AuthyraErrorHandler {
 
 /// Defines how to recover from specific errors
 class ErrorRecoveryStrategy {
-  final AuthyraException exception;
+  final AuthException exception;
 
   ErrorRecoveryStrategy(this.exception);
 

@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:authyra/src/core/exceptions.dart';
-import 'package:authyra/src/core/logger.dart';
+import 'package:authyra/src/exceptions/auth_exceptions.dart';
+import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_user.dart';
-import 'package:authyra/src/models/session_registry.dart';
-import 'package:authyra/src/storage/auth_storage.dart';
+import 'package:authyra/src/session/session_registry.dart';
+import 'package:authyra/src/interfaces/auth_storage.dart';
 
 /// Callback invoked whenever the active [AuthSession] changes.
 ///
@@ -234,7 +234,7 @@ class SessionManager with AuthyraLogging {
       }
 
       return session;
-    } on AuthyraException {
+    } on AuthException {
       rethrow;
     } catch (e, stackTrace) {
       logError('Failed to get active session', e, stackTrace);
@@ -314,7 +314,7 @@ class SessionManager with AuthyraLogging {
         _notifyListeners(newRegistry.activeSession);
 
         logInfo('Switched to account: $userId');
-      } on AuthyraException {
+      } on AuthException {
         rethrow;
       } catch (e, stackTrace) {
         logError('Failed to switch account', e, stackTrace);

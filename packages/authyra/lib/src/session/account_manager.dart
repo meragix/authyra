@@ -1,6 +1,6 @@
-import 'package:authyra/src/core/exceptions.dart';
-import 'package:authyra/src/core/logger.dart';
-import 'package:authyra/src/core/session/session_manager.dart';
+import 'package:authyra/src/exceptions/auth_exceptions.dart';
+import 'package:authyra/src/internal/logger.dart';
+import 'package:authyra/src/session/session_manager.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_state.dart';
 import 'package:authyra/src/models/auth_user.dart';
@@ -158,7 +158,7 @@ class AccountManager with AuthyraLogging {
       }
 
       logInfo('Switched to account: $userId');
-    } on AuthyraException {
+    } on AuthException {
       rethrow;
     } catch (e, stackTrace) {
       logError('Failed to switch account', e, stackTrace);

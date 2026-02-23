@@ -1,4 +1,4 @@
-import 'package:authyra/src/core/exceptions.dart';
+import 'package:authyra/src/exceptions/auth_exceptions.dart';
 
 /// Validation utilities for Authyra
 class AuthValidators {
