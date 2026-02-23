@@ -321,7 +321,6 @@ class AuthSession extends Equatable {
       ];
 
   @override
-  String toString() =>
-      'AuthSession(userId: ${user.id}, provider: $providerId, '
+  String toString() => 'AuthSession(userId: ${user.id}, provider: $providerId, '
       'expired: $isExpired, linkedProviders: $linkedProviders)';
 }

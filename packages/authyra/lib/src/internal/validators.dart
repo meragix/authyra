@@ -328,7 +328,9 @@ class AuthValidators {
     final missingFields = <String>[];
 
     if (!sessionData.containsKey('user')) missingFields.add('user');
-    if (!sessionData.containsKey('accessToken')) missingFields.add('accessToken');
+    if (!sessionData.containsKey('accessToken')) {
+      missingFields.add('accessToken');
+    }
     if (!sessionData.containsKey('expiresAt')) missingFields.add('expiresAt');
 
     if (missingFields.isNotEmpty) {

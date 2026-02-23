@@ -129,7 +129,9 @@ class CredentialsProvider with AuthyraLogging implements AuthProvider {
       final authorizeWithTokens = _authorizeWithTokens;
       if (authorizeWithTokens != null) {
         final result = await authorizeWithTokens(params);
-        if (result == null) logWarning('Authorization returned null for provider: $id');
+        if (result == null) {
+          logWarning('Authorization returned null for provider: $id');
+        }
         return result;
       }
 
@@ -141,7 +143,8 @@ class CredentialsProvider with AuthyraLogging implements AuthProvider {
 
       return AuthSignInResult.userOnly(user);
     } catch (e, stackTrace) {
-      logError('Authorization error in CredentialsProvider[$id]', e, stackTrace);
+      logError(
+          'Authorization error in CredentialsProvider[$id]', e, stackTrace);
       rethrow;
     }
   }

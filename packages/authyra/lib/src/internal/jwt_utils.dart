@@ -97,7 +97,9 @@ abstract final class JwtUtils {
     // dart_jsonwebtoken does not expose the raw header as a public field,
     // so we decode it directly from the base64url-encoded first segment.
     final parts = token.split('.');
-    if (parts.length < 2) throw JWTException('Malformed JWT: not enough segments');
+    if (parts.length < 2) {
+      throw JWTException('Malformed JWT: not enough segments');
+    }
     final headerJson = utf8.decode(
       base64Url.decode(base64Url.normalize(parts[0])),
     );

@@ -138,5 +138,6 @@ class ProxyOAuthConfig {
 ///
 /// Renamed for consistent OAuth acronym capitalisation. Migrate to
 /// [ProxyOAuthConfig] and remove this alias in v0.2.0.
-@Deprecated('Use ProxyOAuthConfig instead. This alias will be removed in v0.2.0.')
+@Deprecated(
+    'Use ProxyOAuthConfig instead. This alias will be removed in v0.2.0.')
 typedef ProxyOauthConfig = ProxyOAuthConfig;

@@ -133,7 +133,8 @@ class AuthState extends Equatable {
   List<Object?> get props => [type, user, error];
 
   @override
-  String toString() => 'AuthState(type: $type, userId: ${user?.id}, error: $error)';
+  String toString() =>
+      'AuthState(type: $type, userId: ${user?.id}, error: $error)';
 }
 
 /// Discriminant enum for [AuthState].

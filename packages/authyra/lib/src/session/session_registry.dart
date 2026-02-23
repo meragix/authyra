@@ -145,8 +145,7 @@ class SessionRegistry extends Equatable {
   SessionRegistry removeSession(String userId) {
     if (!sessions.containsKey(userId)) return this;
 
-    final newSessions = Map<String, AuthSession>.from(sessions)
-      ..remove(userId);
+    final newSessions = Map<String, AuthSession>.from(sessions)..remove(userId);
 
     String? newActiveUserId = activeUserId;
     if (activeUserId == userId) {

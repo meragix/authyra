@@ -58,11 +58,15 @@ class AuthyraLogger {
 
   static void enable() => _config = _config.copyWith(enabled: true);
   static void disable() => _config = _config.copyWith(enabled: false);
-  static void setMinLevel(LogLevel level) => _config = _config.copyWith(minLevel: level);
+  static void setMinLevel(LogLevel level) =>
+      _config = _config.copyWith(minLevel: level);
 
-  static void debug(String message, [dynamic data]) => _log(LogLevel.debug, message, data);
-  static void info(String message, [dynamic data]) => _log(LogLevel.info, message, data);
-  static void warning(String message, [dynamic data]) => _log(LogLevel.warning, message, data);
+  static void debug(String message, [dynamic data]) =>
+      _log(LogLevel.debug, message, data);
+  static void info(String message, [dynamic data]) =>
+      _log(LogLevel.info, message, data);
+  static void warning(String message, [dynamic data]) =>
+      _log(LogLevel.warning, message, data);
 
   /// Log error message
   static void error(String message, [dynamic error, StackTrace? stackTrace]) {

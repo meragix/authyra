@@ -78,7 +78,8 @@ class OAuth2CallbackHandler {
   /// the first. Use distinct schemes for parallel multi-provider support.
   static void registerProvider(String scheme, OAuth2Provider provider) {
     _providers[scheme] = provider;
-    AuthyraLogger.debug('OAuth2CallbackHandler: registered provider "${provider.id}" for scheme "$scheme"');
+    AuthyraLogger.debug(
+        'OAuth2CallbackHandler: registered provider "${provider.id}" for scheme "$scheme"');
   }
 
   /// Unregisters the provider associated with [scheme].
@@ -87,7 +88,8 @@ class OAuth2CallbackHandler {
   static void unregisterProvider(String scheme) {
     final removed = _providers.remove(scheme);
     if (removed != null) {
-      AuthyraLogger.debug('OAuth2CallbackHandler: unregistered provider "${removed.id}" for scheme "$scheme"');
+      AuthyraLogger.debug(
+          'OAuth2CallbackHandler: unregistered provider "${removed.id}" for scheme "$scheme"');
     }
   }
 
@@ -107,7 +109,8 @@ class OAuth2CallbackHandler {
   /// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
   /// ```
   static void handleCallback(Uri uri) {
-    AuthyraLogger.debug('OAuth2CallbackHandler: incoming callback — ${uri.toString()}');
+    AuthyraLogger.debug(
+        'OAuth2CallbackHandler: incoming callback — ${uri.toString()}');
 
     final provider = _providers[uri.scheme];
     if (provider != null) {

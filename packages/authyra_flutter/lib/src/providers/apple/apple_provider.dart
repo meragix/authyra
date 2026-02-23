@@ -217,7 +217,9 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
       final user = _extractUser(idToken, appleUserJson);
 
       final expiresInStr = tokens['expires_in'];
-      final expiresAt = expiresInStr != null ? DateTime.now().add(Duration(seconds: int.parse(expiresInStr))) : null;
+      final expiresAt = expiresInStr != null
+          ? DateTime.now().add(Duration(seconds: int.parse(expiresInStr)))
+          : null;
 
       logInfo('Sign in with Apple successful for user: ${user.id}');
 
@@ -352,13 +354,22 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
 
     // PKCE (RFC 7636)
     final verifierBytes = List<int>.generate(32, (_) => random.nextInt(256));
-    _codeVerifier = base64UrlEncode(verifierBytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
+    _codeVerifier = base64UrlEncode(verifierBytes)
+        .replaceAll('=', '')
+        .replaceAll('+', '-')
+        .replaceAll('/', '_');
     final digest = sha256.convert(utf8.encode(_codeVerifier!));
-    _codeChallenge = base64UrlEncode(digest.bytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
+    _codeChallenge = base64UrlEncode(digest.bytes)
+        .replaceAll('=', '')
+        .replaceAll('+', '-')
+        .replaceAll('/', '_');
 
     // CSRF state (RFC 6749 §10.12)
     final stateBytes = List<int>.generate(16, (_) => random.nextInt(256));
-    _state = base64UrlEncode(stateBytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
+    _state = base64UrlEncode(stateBytes)
+        .replaceAll('=', '')
+        .replaceAll('+', '-')
+        .replaceAll('/', '_');
 
     // Nonce — raw lowercase hex, included in id_token for replay protection.
     final nonceBytes = List<int>.generate(16, (_) => random.nextInt(256));
@@ -483,9 +494,11 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
 
       return {
         'access_token': data['access_token'] as String,
-        if (data['refresh_token'] != null) 'refresh_token': data['refresh_token'] as String,
+        if (data['refresh_token'] != null)
+          'refresh_token': data['refresh_token'] as String,
         if (data['id_token'] != null) 'id_token': data['id_token'] as String,
-        if (data['expires_in'] != null) 'expires_in': data['expires_in'].toString(),
+        if (data['expires_in'] != null)
+          'expires_in': data['expires_in'].toString(),
       };
     } on DioException catch (e) {
       logError('Apple code exchange failed', e);

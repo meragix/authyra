@@ -1,4 +1,4 @@
-import 'package:authyra/src/models/auth_user.dart';
+import 'package:authyra/authyra.dart';
 import 'package:authyra_flutter/src/providers/oauth2/oauth2_config.dart';
 import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 
@@ -104,8 +104,7 @@ class GoogleProvider extends OAuth2Provider {
             authorizationEndpoint:
                 'https://accounts.google.com/o/oauth2/v2/auth',
             tokenEndpoint: 'https://oauth2.googleapis.com/token',
-            userInfoEndpoint:
-                'https://www.googleapis.com/oauth2/v3/userinfo',
+            userInfoEndpoint: 'https://www.googleapis.com/oauth2/v3/userinfo',
             redirectUri: redirectUri ??
                 'com.googleusercontent.apps.$clientId:/oauth2redirect',
             scopes: scopes,

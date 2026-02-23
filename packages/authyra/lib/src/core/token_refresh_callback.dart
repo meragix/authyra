@@ -19,4 +19,5 @@ import 'package:authyra/src/models/auth_session.dart';
 ///   );
 /// }
 /// ```
-typedef TokenRefreshCallback = Future<AuthSession> Function(AuthSession session);
+typedef TokenRefreshCallback = Future<AuthSession> Function(
+    AuthSession session);

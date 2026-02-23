@@ -284,7 +284,8 @@ class ValidationException extends AuthException {
 
 /// Thrown when email format is invalid
 class InvalidEmailException extends ValidationException {
-  InvalidEmailException(String email) : super('email', '"$email" is not a valid email address');
+  InvalidEmailException(String email)
+      : super('email', '"$email" is not a valid email address');
 }
 
 /// Thrown when password doesn't meet requirements
@@ -383,7 +384,8 @@ class AuthyraErrorHandler {
       return TimeoutException(const Duration(seconds: 30));
     }
 
-    if (error.toString().contains('DioException') || error.toString().contains('DioError')) {
+    if (error.toString().contains('DioException') ||
+        error.toString().contains('DioError')) {
       return NetworkException(
         'Request failed',
         originalError: error,
@@ -496,7 +498,9 @@ class ErrorRecoveryStrategy {
 
   /// Check if operation should be retried automatically
   bool shouldRetry() {
-    return exception is NetworkException || exception is TimeoutException || exception is NoInternetException;
+    return exception is NetworkException ||
+        exception is TimeoutException ||
+        exception is NoInternetException;
   }
 
   /// Get retry delay (exponential backoff)

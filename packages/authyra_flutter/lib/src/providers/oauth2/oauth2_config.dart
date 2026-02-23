@@ -1,4 +1,4 @@
-import 'package:authyra/src/models/auth_user.dart';
+import 'package:authyra/authyra.dart';
 
 /// Configuration for an [OAuth2Provider] instance.
 ///

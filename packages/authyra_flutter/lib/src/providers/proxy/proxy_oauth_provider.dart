@@ -309,7 +309,8 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
     final error = callbackUri.queryParameters['error'];
     if (error != null) {
       final description = callbackUri.queryParameters['error_description'];
-      logError('Backend OAuth error for $id', {'error': error, 'description': description});
+      logError('Backend OAuth error for $id',
+          {'error': error, 'description': description});
       if (error == 'access_denied') throw AuthenticationCancelledException(id);
       throw AuthenticationFailedException(
         description ?? error,
@@ -377,7 +378,9 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
     final accessToken = data['access_token'] as String? ?? token;
     final refreshToken = data['refresh_token'] as String?;
     final expiresIn = data['expires_in'] as int?;
-    final expiresAt = expiresIn != null ? DateTime.now().add(Duration(seconds: expiresIn)) : null;
+    final expiresAt = expiresIn != null
+        ? DateTime.now().add(Duration(seconds: expiresIn))
+        : null;
 
     logInfo('Backend token exchange successful for $id: ${user.id}');
 

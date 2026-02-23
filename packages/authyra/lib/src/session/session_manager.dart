@@ -496,7 +496,8 @@ class SessionManager with AuthyraLogging {
       logDebug('Registry loaded: ${_registry.accountCount} account(s)');
     } on FormatException catch (e, stackTrace) {
       // Corrupted data — reset to a clean state rather than hard-failing.
-      logError('Registry JSON corrupted — resetting to empty state', e, stackTrace);
+      logError(
+          'Registry JSON corrupted — resetting to empty state', e, stackTrace);
       _registry = const SessionRegistry();
       await storage.delete(_registryKey);
     }

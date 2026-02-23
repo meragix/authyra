@@ -1,4 +1,3 @@
-
 /// Authyra — Pure Authentication Logic Framework
 ///
 /// Works on any Dart platform:
