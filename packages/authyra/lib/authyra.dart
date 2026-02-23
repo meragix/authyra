@@ -16,20 +16,25 @@ export 'src/models/auth_user.dart';
 export 'src/models/auth_session.dart';
 export 'src/models/auth_state.dart';
 export 'src/models/auth_config.dart';
+export 'src/models/auth_token_result.dart';
 
 // ---------------------------------------------------------------------------
-// Core
+// Interfaces (for custom implementations)
+// ---------------------------------------------------------------------------
+export 'src/interfaces/auth_provider.dart';
+export 'src/interfaces/auth_storage.dart';
+
+// ---------------------------------------------------------------------------
+// Client
 // ---------------------------------------------------------------------------
 export 'src/client/authyra_client.dart';
 export 'src/client/authyra_instance.dart';
-export 'src/session/account_manager.dart';
-export 'src/exceptions/auth_exceptions.dart';
+export 'src/client/client_builder.dart';
 
 // ---------------------------------------------------------------------------
-// Provider base + result types
+// Session — public API only (SessionManager internals are never exported)
 // ---------------------------------------------------------------------------
-export 'src/interfaces/auth_provider.dart'
-    show AuthProvider, AuthProviderType, AuthSignInResult, AuthTokenResult;
+export 'src/session/account_manager.dart';
 
 // ---------------------------------------------------------------------------
 // Built-in providers
@@ -37,20 +42,14 @@ export 'src/interfaces/auth_provider.dart'
 export 'src/providers/credentials/credentials_provider.dart';
 
 // ---------------------------------------------------------------------------
-// Storage interface
+// Exceptions
 // ---------------------------------------------------------------------------
-export 'src/interfaces/auth_storage.dart';
+export 'src/exceptions/auth_exceptions.dart';
 
 // ---------------------------------------------------------------------------
-// OAuth2 callback helper
+// Storage — interface + built-in implementations
 // ---------------------------------------------------------------------------
-//export '../../authyra_flutter/lib/src/providers/oauth2/oauth2_callback_handle.dart';
-
-// ---------------------------------------------------------------------------
-// Internal
-// ---------------------------------------------------------------------------
-export 'src/internal/jwt_utils.dart';
-export 'src/internal/logger.dart';
+export 'src/storage/memory_storage.dart';
 
 // ---------------------------------------------------------------------------
 // Convenience alias

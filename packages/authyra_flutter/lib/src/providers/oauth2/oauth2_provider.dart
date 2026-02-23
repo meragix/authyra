@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:authyra/authyra.dart';
-import 'package:authyra_flutter/src/providers/oauth2/oauth2_config.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -212,9 +211,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
       // expires_in is included as a String in the returned map (token endpoint
       // returns it as a JSON integer, which we stringify to stay Map<String,String>).
       final expiresInStr = tokens['expires_in'];
-      final expiresAt = expiresInStr != null
-          ? DateTime.now().add(Duration(seconds: int.parse(expiresInStr)))
-          : null;
+      final expiresAt = expiresInStr != null ? DateTime.now().add(Duration(seconds: int.parse(expiresInStr))) : null;
 
       logInfo('OAuth2 sign in successful for $id');
 
@@ -371,16 +368,10 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
     final random = Random.secure();
     final bytes = List<int>.generate(32, (_) => random.nextInt(256));
 
-    _codeVerifier = base64UrlEncode(bytes)
-        .replaceAll('=', '')
-        .replaceAll('+', '-')
-        .replaceAll('/', '_');
+    _codeVerifier = base64UrlEncode(bytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
 
     final digest = sha256.convert(utf8.encode(_codeVerifier!));
-    _codeChallenge = base64UrlEncode(digest.bytes)
-        .replaceAll('=', '')
-        .replaceAll('+', '-')
-        .replaceAll('/', '_');
+    _codeChallenge = base64UrlEncode(digest.bytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
 
     _generateState();
   }
@@ -389,10 +380,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   void _generateState() {
     final random = Random.secure();
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    _state = base64UrlEncode(bytes)
-        .replaceAll('=', '')
-        .replaceAll('+', '-')
-        .replaceAll('/', '_');
+    _state = base64UrlEncode(bytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
   }
 
   /// Verifies that the `state` in the callback matches the one sent in the
@@ -450,9 +438,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
       ...config.additionalAuthParams,
     };
 
-    return Uri.parse(config.authorizationEndpoint)
-        .replace(queryParameters: queryParams)
-        .toString();
+    return Uri.parse(config.authorizationEndpoint).replace(queryParameters: queryParams).toString();
   }
 
   /// Launches [url] in an external browser and waits for [handleRedirectCallback]
@@ -470,8 +456,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
         );
       }
 
-      final launched =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched) {
         throw AuthenticationFailedException(
           'Failed to launch authorization URL for $id',
@@ -510,8 +495,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
       'redirect_uri': config.redirectUri,
       'client_id': config.clientId,
       if (config.clientSecret != null) 'client_secret': config.clientSecret,
-      if (config.usePkce && _codeVerifier != null)
-        'code_verifier': _codeVerifier!,
+      if (config.usePkce && _codeVerifier != null) 'code_verifier': _codeVerifier!,
       ...config.additionalTokenParams,
     };
 
@@ -536,13 +520,11 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
 
       return {
         'access_token': data['access_token'] as String,
-        if (data['refresh_token'] != null)
-          'refresh_token': data['refresh_token'] as String,
+        if (data['refresh_token'] != null) 'refresh_token': data['refresh_token'] as String,
         if (data['id_token'] != null) 'id_token': data['id_token'] as String,
         // Stringify expires_in so the Map<String,String> type is preserved.
         // Parsed back to int in signIn() via int.parse().
-        if (data['expires_in'] != null)
-          'expires_in': data['expires_in'].toString(),
+        if (data['expires_in'] != null) 'expires_in': data['expires_in'].toString(),
       };
     } on DioException catch (e) {
       logError('Code exchange failed for $id', e);

@@ -1,15 +1,15 @@
 ---
 seo:
-  title: Authyra | The Modular Auth Framework for Dart & Flutter
-  description: Build secure, flexible, and type-safe authentication flows. Pure Dart core, native OAuth support, and zero-boilerplate integration.
+  title: Authyra | Authentication Framework for Dart & Flutter
+  description: Type-safe, modular authentication for Dart and Flutter. Pure Dart core, OAuth2 with PKCE, multi-account sessions, and reactive state — no black-box SDK.
 ---
 
 ::u-page-hero
 #title
-Authentication [Simplified.]{.text-primary} Modular by Design.
+Auth done right. [No black box.]{.text-primary}
 
 #description
-Authyra is a lightweight yet powerful authentication framework for Dart and Flutter. Focus on your features, we handle the tokens, sessions, and provider logic with a clean, interface-driven approach.
+Authyra is a modular authentication framework for Dart and Flutter. A pure Dart core you can unit-test anywhere, OAuth2 providers you wire in one call, and a reactive `Stream<AuthState>` that plugs into any UI framework.
 
 #links
   :::u-button
@@ -36,7 +36,7 @@ Authyra is a lightweight yet powerful authentication framework for Dart and Flut
 
 ::u-page-section
 #title
-Why developers choose Authyra
+Built for developers who own their auth
 
 #features
   :::u-page-feature
@@ -44,21 +44,22 @@ Why developers choose Authyra
   icon: i-lucide-box
   ---
   #title
-  [Pure Dart]{.text-primary} Core
-  
+  [Pure Dart]{.text-primary} core
+
   #description
-  Zero dependencies on Flutter in the core engine. Perfect for unit testing, server-side Dart, or sharing auth logic between your mobile app and CLI tools.
+  Zero Flutter dependency in `authyra`. Run the same auth logic in your mobile app, a Dart Frog backend, and a CLI tool — with a single `dart test` for all of it.
   :::
 
   :::u-page-feature
   ---
-  icon: i-lucide-shield-check
+  icon: i-lucide-plug
   ---
+
   #title
-  [Type-Safe]{.text-primary} Sessions
-  
+  [Pluggable]{.text-primary} everywhere
+
   #description
-  Stop managing raw Strings. Authyra provides structured objects for Users and Sessions, with built-in expiration tracking and automatic silent refresh.
+  `AuthProvider` and `AuthStorage` are interfaces. Swap Google for SAML, `flutter_secure_storage` for Redis, or mock everything in tests — no subclasses required.
   :::
 
   :::u-page-feature
@@ -66,11 +67,10 @@ Why developers choose Authyra
   icon: i-lucide-users-round
   ---
   #title
-  Native [Multi-Account]{.text-primary}
-  
+  [Multi-account]{.text-primary} built in
+
   #description
-  <!-- Whether it's Google, Apple, or your own custom backend, Authyra’s provider architecture ensures a consistent API across all authentication methods. -->
-  Switch between user profiles seamlessly. Authyra manages a session registry, allowing users to stay logged in with multiple accounts (Work, Personal, etc.) simultaneously.
+  `AccountManager` ships in the core — not as an add-on. Switch between work and personal accounts, sign out selectively, and clean expired sessions in one call.
   :::
 
   :::u-page-feature
@@ -78,21 +78,22 @@ Why developers choose Authyra
   icon: i-lucide-refresh-cw
   ---
   #title
-  Automatic [Token Refresh]{.text-primary}
-  
+  Silent [token refresh]{.text-primary}
+
   #description
-  Never worry about expired access tokens again. Authyra handles the background refresh logic and ensures your users stay authenticated seamlessly.
+  Providers that set `supportsRefresh: true` get automatic background renewal. When the refresh token expires, the session is cleared and `authStateChanges` emits — no surprises.
   :::
 
   :::u-page-feature
   ---
-  icon: i-lucide-fingerprint
+  icon: i-lucide-shield-check
   ---
+
   #title
-  Security [Best Practices]{.text-primary}
-  
+  OAuth2 with [PKCE]{.text-primary}
+
   #description
-  Designed with OWASP and OAuth2 standards in mind. Secure credential handling, PKCE-ready flows, and isolated storage namespaces by default.
+  `OAuth2Provider` (in `authyra_flutter`) implements the full Authorization Code + PKCE flow. Prebuilt providers for Google, GitHub, Apple, and a proxy mode for keeping client secrets server-side.
   :::
 
   :::u-page-feature
@@ -100,9 +101,9 @@ Why developers choose Authyra
   icon: i-lucide-code-2
   ---
   #title
-  [Minimal]{.text-primary} Boilerplate
-  
+  [Reactive]{.text-primary} by default
+
   #description
-  Initialize, sign in, and listen to state changes. Authyra is designed to be integrated in minutes, with clean Streams and reactive state management.
+  `authStateChanges` is a broadcast `Stream<AuthState>` with `Equatable` deduplication. Wire it to `StreamBuilder`, Riverpod, Bloc, or GoRouter — zero boilerplate.
   :::
 ::
