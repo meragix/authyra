@@ -1,40 +1,64 @@
 docs/
-├── README.md                          # Landing page
+├── README.md                              # Landing page — what Authyra is and why
 ├── getting-started/
-│   ├── installation.md
-│   ├── quick-start.md
-│   ├── configuration.md
-│   └── first-auth.md
+│   ├── installation.md                    # pubspec setup for authyra and authyra_flutter
+│   ├── quick-start.md                     # Minimal working app in < 20 lines
+│   ├── configuration.md                   # AuthConfig options (autoRefresh, tokenLifetime…)
+│   └── first-auth.md                      # Email/password sign-in end to end
+│
 ├── core-concepts/
-│   ├── architecture.md
-│   ├── providers.md
-│   ├── storage.md
-│   ├── sessions.md
-│   └── reactivity.md
+│   ├── architecture.md                    # Two-layer design: AuthyraClient vs AuthyraInstance
+│   ├── providers.md                       # AuthProvider interface and strategy types
+│   ├── sessions.md                        # AuthSession lifecycle, expiry, shouldRefresh
+│   ├── storage.md                         # AuthStorage contract and security guidance
+│   └── reactivity.md                      # authStateChanges stream + synchronous cache
+│
+├── providers/
+│   ├── credentials.md                     # CredentialsProvider — basic and .withTokens
+│   ├── oauth2.md                          # OAuth2Provider — PKCE, config, deep-link wiring
+│   ├── google.md                          # GoogleProvider — setup, scopes, redirect URI
+│   ├── github.md                          # GitHubOAuth2Provider
+│   ├── apple.md                           # AppleProvider — Sign in with Apple
+│   └── proxy-oauth.md                     # ProxyOAuthProvider — backend-delegated flow
+│
 ├── guides/
-│   ├── email-auth.md
-│   ├── route-protection.md
-│   ├── custom-provider.md
-│   ├── custom-storage.md
-│   └── testing.md
-├── api-reference/
-│   ├── authyra-client.md
-│   ├── authyra-instance.md
-│   ├── auth-account.md
-│   ├── auth-provider.md
-│   └── auth-storage.md
+│   ├── email-auth.md                      # Full email/password flow with JWT backend
+│   ├── oauth2-flow.md                     # Custom OAuth2 provider (Discord, LinkedIn…)
+│   ├── deep-links.md                      # OAuth2CallbackHandler wiring (app_links)
+│   ├── token-refresh.md                   # Silent refresh, retry policy, forced re-auth
+│   ├── multi-account.md                   # AccountManager — switch, sign out, clean
+│   ├── route-protection.md                # GoRouter guard + AuthGuard widget
+│   ├── custom-provider.md                 # Implementing AuthProvider from scratch
+│   ├── custom-storage.md                  # Implementing AuthStorage (Redis, encrypted file…)
+│   └── testing.md                         # AuthyraClient with InMemoryStorage in tests
+│
 ├── flutter/
-│   ├── authyra-scope.md
-│   ├── auth-builder.md
-│   ├── auth-guard.md
-│   └── extensions.md
+│   ├── setup.md                           # authyra_flutter initialization at app startup
+│   ├── secure-storage.md                  # SecureAuthStorage (Keychain / Keystore)
+│   ├── auth-guard.md                      # AuthGuard widget — gate UI on AuthState
+│   ├── auth-builder.md                    # AuthBuilder — reactive stream-based builder
+│   ├── router-guard.md                    # GoRouter / auto_route redirect integration
+│   └── app-binding.md                     # AuthyraAppBinding — pause refresh in background
+│
+├── api-reference/
+│   ├── authyra-client.md                  # AuthyraClient — all public methods
+│   ├── authyra-instance.md                # AuthyraInstance (Authyra typedef) — singleton API
+│   ├── account-manager.md                 # AccountManager — multi-account API
+│   ├── auth-provider.md                   # AuthProvider abstract interface
+│   ├── auth-storage.md                    # AuthStorage abstract interface
+│   ├── auth-session.md                    # AuthSession — fields, refreshed(), isExpired
+│   ├── auth-state.md                      # AuthState — type enum, user, error
+│   └── auth-exceptions.md                 # Exception hierarchy
+│
 ├── examples/
-│   ├── basic-app.md
-│   ├── backend-usage.md
-│   └── testing-setup.md
+│   ├── flutter-app.md                     # Full Flutter app: email + Google sign-in
+│   ├── dart-backend.md                    # Shelf/Dart Frog backend with authyra core
+│   └── testing-setup.md                   # Test suite setup with InMemoryStorage
+│
 ├── migration/
-│   ├── from-firebase.md
-│   └── from-supabase.md
-├── troubleshooting.md
-├── faq.md
-└── changelog.md
+│   ├── from-firebase.md                   # Firebase Auth → Authyra mapping
+│   └── from-supabase.md                   # Supabase Auth → Authyra mapping
+│
+├── troubleshooting.md                     # Common errors and fixes
+├── faq.md                                 # Frequently asked questions
+└── changelog.md                           # Version history

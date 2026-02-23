@@ -1,19 +1,21 @@
 # authyra
 
-**Pure Dart authentication logic framework.**
+[![pub.dev](https://img.shields.io/pub/v/authyra.svg)](https://pub.dev/packages/authyra)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/meragix/authyra/blob/main/LICENSE)
 
-`authyra` is the core package — zero Flutter dependency, runs on any Dart platform: mobile, web, desktop, backend (Shelf, Dart Frog), and CLI.
+Authentication framework for Dart. No Flutter dependency. Runs on mobile, web, desktop, backend (Shelf, Dart Frog), and CLI.
 
-## Features
+---
 
-- Stateless `AuthyraClient` — fully injectable, 100% testable, no global state
-- Reactive singleton `AuthyraInstance` — broadcast streams + synchronous state cache
-- Built-in providers: `CredentialsProvider`, `OAuth2Provider` (PKCE), `GoogleProvider`, `GitHubOAuth2Provider`, `ProxyOAuthProvider`
-- Pluggable `AuthStorage` interface — bring your own persistence
-- `InMemoryAuthStorage` bundled for tests and development
-- Multi-account `AccountManager` — switch, sign out one, sign out all
-- `AuthSession` with expiry tracking and `shouldRefresh` detection
-- `AuthState` with `Equatable` — stream deduplication out of the box
+## What it does
+
+- **`AuthyraClient`** — stateless orchestrator. Handles provider registration, session creation, and token operations. No global state, fully injectable, 100% testable.
+- **`AuthyraInstance`** — singleton wrapper. Adds reactive `Stream<AuthState>`, synchronous state cache, and a one-call initialization API for app startup.
+- **`SessionManager`** — multi-account session registry. Persists, restores, switches, and cleans up sessions.
+- **`AuthStorage`** — pluggable interface. Bring your own persistence: `flutter_secure_storage`, Redis, encrypted file — anything.
+- **`AuthProvider`** — pluggable strategy interface. Implement it to add any authentication flow.
+
+---
 
 ## Installation
 
@@ -22,121 +24,187 @@ dependencies:
   authyra: ^0.1.0
 ```
 
-## Quick Start
+---
+
+## Quick start
 
 ```dart
 import 'package:authyra/authyra.dart';
 
 void main() async {
-  // 1. Build the client — pure Dart, no side effects
-  final client = AuthyraClient(
-    providers: [
-      CredentialsProvider.withTokens(
-        id: 'email',
-        authorize: (creds) async {
-          final res = await myApi.post('/auth/login', body: creds);
-          if (res.statusCode != 200) return null;
-          return AuthSignInResult(
-            user:         AuthUser(id: res.data['id'], email: res.data['email']),
-            accessToken:  res.data['accessToken'],
-            refreshToken: res.data['refreshToken'],
-            expiresAt:    DateTime.parse(res.data['expiresAt']),
-          );
-        },
-      ),
-    ],
-    storage: InMemoryAuthStorage(), // use SecureAuthStorage in production
+  await Authyra.initialize(
+    client: AuthyraClient(
+      providers: [
+        CredentialsProvider.withTokens(
+          id: 'email',
+          authorize: (creds) async {
+            final res = await myApi.post('/auth/login', body: creds);
+            if (res.statusCode != 200) return null;
+            return AuthSignInResult(
+              user: AuthUser(id: res.data['id'], email: res.data['email']),
+              accessToken: res.data['accessToken'],
+              refreshToken: res.data['refreshToken'],
+              expiresAt: DateTime.parse(res.data['expiresAt']),
+            );
+          },
+        ),
+      ],
+      storage: MyStorage(), // implement AuthStorage for your platform
+    ),
   );
 
-  // 2. Initialize the singleton (restores persisted session)
-  await Authyra.initialize(client: client);
-
-  // 3. React to auth state
-  Authyra.instance.authStateChanges.listen((state) {
-    print('[${state.type.name}] ${state.user?.email}');
-  });
-
-  // 4. Sign in
+  // Sign in
   final user = await Authyra.instance.signIn('email', params: {
-    'email':    'alice@example.com',
-    'password': 'secret',
+    'email': 'alice@example.com',
+    'password': 's3cr3t',
   });
-  print('Hello, ${user.name}!');
 
-  // 5. Synchronous state — no await
-  print(Authyra.instance.isAuthenticated); // true
+  // Synchronous state — no await
+  print(Authyra.instance.isAuthenticated);   // true
   print(Authyra.instance.currentUser?.email);
 
-  // 6. Sign out
+  // Reactive state
+  Authyra.instance.authStateChanges.listen((state) {
+    switch (state.type) {
+      case AuthStateType.authenticated:   print('Hello ${state.user!.name}');
+      case AuthStateType.unauthenticated: print('Signed out');
+      case AuthStateType.error:           print('Error: ${state.error}');
+    }
+  });
+
+  // Sign out
   await Authyra.instance.signOut();
 }
 ```
 
+---
+
 ## Providers
 
-| Provider                         | Strategy    | Notes                                          |
-| -------------------------------- | ----------- | ---------------------------------------------- |
-| `CredentialsProvider`            | credentials | User profile only — no token storage           |
-| `CredentialsProvider.withTokens` | credentials | JWT backend — stores access + refresh tokens   |
-| `OAuth2Provider`                 | oauth2      | Authorization Code + PKCE (any provider)       |
-| `GoogleProvider`                 | oauth2      | Prebuilt Google Sign-In                        |
-| `GitHubOAuth2Provider`           | oauth2      | Prebuilt GitHub OAuth (no PKCE)                |
-| `ProxyOAuthProvider`             | oauth2      | Backend-delegated — client secret stays server |
+### `CredentialsProvider` — email / password
 
-## Custom Provider
+Two constructors depending on what your backend returns:
 
 ```dart
-class MyProvider implements AuthProvider {
-  @override String get id   => 'my-api';
-  @override AuthProviderType get type => AuthProviderType.credentials;
-  @override bool get supportsRefresh  => true;
+// Backend returns a user profile only (cookie / opaque session)
+CredentialsProvider(
+  id: 'email',
+  authorize: (creds) async {
+    final res = await myApi.post('/login', body: creds);
+    if (res.statusCode != 200) return null;
+    return AuthUser(id: res.data['id'], email: res.data['email']);
+  },
+)
+
+// Backend returns JWT tokens (recommended)
+CredentialsProvider.withTokens(
+  id: 'email',
+  authorize: (creds) async {
+    final res = await myApi.post('/login', body: creds);
+    if (res.statusCode != 200) return null;
+    return AuthSignInResult(
+      user: AuthUser(id: res.data['userId'], email: res.data['email']),
+      accessToken: res.data['accessToken'],
+      refreshToken: res.data['refreshToken'],
+      expiresAt: DateTime.parse(res.data['expiresAt']),
+    );
+  },
+)
+```
+
+### Custom provider
+
+Implement `AuthProvider` to plug in any strategy — SAML, magic link, phone OTP, a proprietary SSO:
+
+```dart
+class MagicLinkProvider implements AuthProvider {
+  @override String get id   => 'magic-link';
+  @override AuthProviderType get type => AuthProviderType.magicLink;
+  @override bool get supportsRefresh => false;
 
   @override
   Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
-    final res = await myApi.post('/auth/login', body: params);
+    final token = params?['token'] as String?;
+    if (token == null) return null;
+    final res = await myApi.post('/auth/magic', body: {'token': token});
     if (res.statusCode != 200) return null;
     return AuthSignInResult(
-      user:         AuthUser(id: res.data['id']),
-      accessToken:  res.data['accessToken'],
-      refreshToken: res.data['refreshToken'],
-      expiresAt:    DateTime.parse(res.data['expiresAt']),
-    );
-  }
-
-  @override
-  Future<AuthTokenResult?> refreshToken(String refreshToken) async {
-    final res = await myApi.post('/auth/refresh', body: {'token': refreshToken});
-    if (res.statusCode != 200) return null;
-    return AuthTokenResult(
+      user: AuthUser(id: res.data['id'], email: res.data['email']),
       accessToken: res.data['accessToken'],
-      expiresAt:   DateTime.parse(res.data['expiresAt']),
+      expiresAt: DateTime.parse(res.data['expiresAt']),
     );
   }
 }
 ```
 
-## Custom Storage
+---
+
+## Storage
+
+`AuthStorage` is a key-value interface. Implement it for your runtime:
 
 ```dart
-class SecureAuthStorage implements AuthStorage {
-  final _store = const FlutterSecureStorage();
-
-  @override Future<void>         initialize()                    async {}
-  @override Future<String?>      read(String key)                => _store.read(key: key);
-  @override Future<void>         write(String key, String value) => _store.write(key: key, value: value);
-  @override Future<bool>         delete(String key) async {
-    final e = await _store.containsKey(key: key);
-    await _store.delete(key: key);
-    return e;
+class MyRedisStorage implements AuthStorage {
+  @override Future<void>         initialize()                    async { /* connect */ }
+  @override Future<String?>      read(String key)                => redis.get(key);
+  @override Future<void>         write(String key, String value) => redis.set(key, value);
+  @override Future<bool>         delete(String key)              async {
+    final existed = await redis.exists(key) > 0;
+    await redis.del([key]);
+    return existed;
   }
-  @override Future<void>         clear()                         => _store.deleteAll();
-  @override Future<bool>         containsKey(String key)         => _store.containsKey(key: key);
-  @override Future<List<String>> getKeysWithPrefix(String p) async {
-    final all = await _store.readAll();
-    return all.keys.where((k) => k.startsWith(p)).toList();
-  }
+  @override Future<void>         clear()                         => redis.flushDb();
+  @override Future<bool>         containsKey(String key)         async => await redis.exists(key) > 0;
+  @override Future<List<String>> getKeysWithPrefix(String p)     => redis.keys('$p*');
 }
 ```
+
+An `InMemoryStorage` (non-persistent) is exported from the package for use in tests and development.
+
+---
+
+## Multi-account
+
+Authyra supports multiple signed-in accounts out of the box:
+
+```dart
+// List all signed-in users
+final accounts = await Authyra.instance.accounts.getAll();
+
+// Switch active account
+await Authyra.instance.accounts.switchTo(userId);
+
+// Sign out a specific account
+await Authyra.instance.accounts.signOut(userId);
+
+// Sign out all accounts
+await Authyra.instance.accounts.signOutAll();
+
+// Remove stale expired sessions
+final removed = await Authyra.instance.accounts.cleanExpired();
+```
+
+---
+
+## Advanced: using `AuthyraClient` directly
+
+For dependency injection or backend use cases where you don't want a singleton:
+
+```dart
+final client = AuthyraClient(
+  providers: [CredentialsProvider(id: 'email', authorize: myAuthorize)],
+  storage: MyStorage(),
+  config: const AuthConfig(autoRefresh: true),
+);
+
+await client.initialize();
+
+final user = await client.signIn('email', params: {'email': '...', 'password': '...'});
+
+client.authStateStream.listen((state) { /* react */ });
+```
+
+---
 
 ## Testing
 
@@ -145,7 +213,7 @@ import 'package:test/test.dart';
 import 'package:authyra/authyra.dart';
 
 void main() {
-  test('sign in with valid credentials', () async {
+  test('sign in succeeds with valid credentials', () async {
     final client = AuthyraClient(
       providers: [
         CredentialsProvider(
@@ -154,7 +222,7 @@ void main() {
               AuthUser(id: '1', email: creds!['email'] as String),
         ),
       ],
-      storage: InMemoryAuthStorage(),
+      storage: InMemoryStorage(),
     );
 
     await client.initialize();
@@ -169,9 +237,13 @@ void main() {
 }
 ```
 
-## Flutter UI
+---
 
-The `flutter_authyra` package (widgets, `BuildContext` extensions, GoRouter helpers) is on the roadmap for **v0.3.0**. Wire Authyra's `authStateChanges` stream directly into your existing routing and state management in the meantime.
+## Flutter
+
+Use [`authyra_flutter`](https://pub.dev/packages/authyra_flutter) for Flutter apps. It re-exports this entire package plus adds OAuth2 providers (Google, GitHub, Apple), `SecureAuthStorage`, `AuthGuard` widget, and GoRouter integration. One import, everything included.
+
+---
 
 ## Documentation
 

@@ -1,116 +1,170 @@
 # Authyra
 
-Pure authentication logic framework for Flutter and Dart.
+Authentication framework for Dart and Flutter. Handles the full auth lifecycle — session persistence, token refresh, multi-account — without locking you into a backend or a UI framework.
 
-## 📦 Packages
+[![pub.dev](https://img.shields.io/pub/v/authyra.svg)](https://pub.dev/packages/authyra)
+[![pub.dev flutter](https://img.shields.io/pub/v/authyra_flutter.svg?label=authyra_flutter)](https://pub.dev/packages/authyra_flutter)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-This monorepo contains:
+---
 
-### [`authyra`](packages/authyra)
+## Packages
 
-[![pub package](https://img.shields.io/pub/v/authyra.svg)](https://pub.dev/packages/authyra)
+| Package | Description |
+|---|---|
+| [`authyra`](packages/authyra) | Core framework — pure Dart, zero Flutter dependency |
+| [`authyra_flutter`](packages/authyra_flutter) | Flutter layer — OAuth2, widgets, GoRouter guard |
 
-Pure Dart authentication logic. Works on:
+**Use `authyra` alone** for Dart backends (Shelf, Dart Frog) or CLI tools.
+**Use `authyra_flutter`** for Flutter apps — it re-exports the entire core so you only ever need one import.
 
-- Flutter (iOS, Android, Web, Desktop)
-- Dart backend (Shelf, Dart Frog)
-- Dart CLI
-- Scripts
+---
 
-```yaml
-dependencies:
-  authyra: ^1.0.0
-```
+## Quick start
 
-### [`flutter_authyra`](packages/flutter_authyra)
-
-[![pub package](https://img.shields.io/pub/v/flutter_authyra.svg)](https://pub.dev/packages/flutter_authyra)
-
-Flutter widgets and extensions for Authyra.
+### Flutter app
 
 ```yaml
+# pubspec.yaml
 dependencies:
-  flutter_authyra: ^1.0.0
+  authyra_flutter: ^0.1.0
 ```
-
-## 🚀 Quick Start
-
-### For Flutter Apps
 
 ```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_authyra/flutter_authyra.dart';
+import 'package:authyra_flutter/authyra_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  Authyra.instance.initialize(
-    AuthyraClient(
-      providers: [EmailAuthProvider()],
-      storage: SecureAuthStorage(),
+
+  await Authyra.initialize(
+    client: AuthyraClient(
+      providers: [
+        CredentialsProvider.withTokens(
+          id: 'email',
+          authorize: (creds) async {
+            final res = await myApi.post('/auth/login', body: creds);
+            if (res.statusCode != 200) return null;
+            return AuthSignInResult(
+              user: AuthUser(id: res.data['id'], email: res.data['email']),
+              accessToken: res.data['accessToken'],
+              refreshToken: res.data['refreshToken'],
+              expiresAt: DateTime.parse(res.data['expiresAt']),
+            );
+          },
+        ),
+        GoogleProvider(clientId: 'YOUR_CLIENT_ID'),
+      ],
+      storage: SecureAuthStorage(), // from authyra_flutter
     ),
   );
-  
-  
-  runApp(
-    AuthyraScope(
-      child: const MyApp(),
-    ),
-  );
+
+  runApp(const MyApp());
 }
 ```
 
-### For Dart Backend
+```dart
+// Anywhere in your app
+await Authyra.instance.signIn('email', params: {
+  'email': 'alice@example.com',
+  'password': 's3cr3t',
+});
+
+// Reactive UI
+StreamBuilder<AuthState>(
+  stream: Authyra.instance.authStateChanges,
+  builder: (context, snapshot) {
+    final state = snapshot.data ?? AuthState.unauthenticated();
+    return state.isAuthenticated ? Dashboard() : LoginPage();
+  },
+);
+```
+
+### Dart backend
+
+```yaml
+dependencies:
+  authyra: ^0.1.0
+```
 
 ```dart
 import 'package:authyra/authyra.dart';
 
-void main() async {
-  Authyra.instance.initialize(
-    AuthyraClient(
-      providers: [EmailAuthProvider()],
+final client = AuthyraClient(
+  providers: [
+    CredentialsProvider.withTokens(
+      id: 'email',
+      authorize: (creds) async { /* validate against your DB */ },
     ),
-  );
-  
-  final account = await Authyra.instance.signIn(
-    provider: 'email',
-    credentials: {'email': 'user@app.com', 'password': '***'},
-  );
-}
+  ],
+  storage: MyRedisStorage(),
+);
+
+await client.initialize();
+
+final user = await client.signIn('email', params: {
+  'email': 'alice@example.com',
+  'password': 's3cr3t',
+});
 ```
 
-## 🏗️ Development
+---
 
-This project uses [Melos](https://melos.invertase.dev/) for monorepo management.
+## Architecture
+
+```text
+packages/
+├── authyra/              ← Core: AuthyraClient, providers, session, storage interface
+└── authyra_flutter/      ← Flutter: OAuth2 providers, SecureStorage, widgets, routing
+```
+
+**Two layers, one principle:** the core is pure Dart. Flutter-specific code (platform channels, URL launcher, secure storage) lives entirely in `authyra_flutter`. The same provider interface works on both layers.
+
+```text
+AuthyraClient          ← stateless orchestrator (injectable, testable)
+    └── SessionManager ← CRUD + multi-account registry
+    └── AuthProvider   ← pluggable auth strategy (credentials / OAuth2 / custom)
+    └── AuthStorage    ← pluggable persistence (you own the implementation)
+
+AuthyraInstance        ← singleton wrapper (reactive streams + sync state cache)
+```
+
+---
+
+## Providers
+
+| Provider | Package | Strategy |
+|---|---|---|
+| `CredentialsProvider` | `authyra` | Email/password or any form-based flow |
+| `CredentialsProvider.withTokens` | `authyra` | JWT backend — stores access + refresh tokens |
+| `OAuth2Provider` | `authyra_flutter` | Authorization Code + PKCE (any IdP) |
+| `GoogleProvider` | `authyra_flutter` | Prebuilt Google Sign-In |
+| `GitHubOAuth2Provider` | `authyra_flutter` | Prebuilt GitHub OAuth |
+| `AppleProvider` | `authyra_flutter` | Sign in with Apple |
+| `ProxyOAuthProvider` | `authyra_flutter` | Backend-delegated OAuth (client secret stays server-side) |
+
+---
+
+## Development
+
+This monorepo uses [Melos](https://melos.invertase.dev/).
 
 ```bash
-# Install Melos
 dart pub global activate melos
+melos bootstrap     # install deps across all packages
 
-# Bootstrap packages
-melos bootstrap
-
-# Run all tests
-melos run test
-
-# Analyze all packages
-melos run analyze
-
-# Format code
-melos run format
+melos run analyze   # dart analyze
+melos run format    # dart format
+melos run test      # run tests with coverage
 ```
 
-## 📚 Documentation
+---
 
-- [Getting Started](https://authyra.dev/docs/getting-started)
-- [Route Protection](https://authyra.dev/docs/route-protection)
-- [Multi-Account](https://authyra.dev/docs/multi-account)
-- [Custom Providers](https://authyra.dev/docs/custom-providers)
+## Documentation
 
-## 🤝 Contributing
+[meragix.github.io/authyra](https://meragix.github.io/authyra)
 
-See [CONTRIBUTING.md](CONTRIBUTING.md)
+---
 
-## 📄 License
+## License
 
-MIT License - see [LICENSE](LICENSE)
+MIT
