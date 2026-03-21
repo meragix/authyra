@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:authyra/src/callbacks/auth_callbacks.dart';
+import 'package:authyra/src/events/auth_events.dart';
+import 'package:authyra/src/events/auth_event_bus.dart';
 import 'package:authyra/src/exceptions/auth_exceptions.dart';
 import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/session/account_manager.dart';
@@ -93,6 +96,21 @@ class AuthyraClient with AuthyraLogging {
   // Lazy-initialised multi-account facade.
   AccountManager? _accountManager;
 
+  // Custom callbacks (middleware)
+  // todo: allow user to add like
+  // callbacks: CompositeCallbacks([
+  //     SecurityCallbacks(),      // IP, device, country checks
+  //     BanCallbacks(),          // Check bans, suspensions
+  //     TenantCallbacks(),       // Multi-tenancy validation
+  //     RateLimitCallbacks(),    // Rate limiting
+  //   ]),
+  AuthCallbacks? _callbacks;
+
+  // Get event bus
+  // usage: Authyra.instance.events.on<SignInEvent>((event) {});
+  // todo: add it to AuthyraInstance also
+  AuthEventBus get events => AuthEventBus.instance;
+
   // Broadcast stream for AuthState changes.
   final _authStateController = StreamController<AuthState>.broadcast();
 
@@ -108,6 +126,7 @@ class AuthyraClient with AuthyraLogging {
   AuthyraClient({
     required this.providers,
     required this.storage,
+    AuthCallbacks? callbacks,
     this.config = const AuthConfig(),
   }) {
     for (final provider in providers) {
@@ -122,6 +141,11 @@ class AuthyraClient with AuthyraLogging {
       autoRefresh: config.autoRefresh,
     );
     _sessionManager.addListener(_onSessionChanged);
+
+    if (callbacks != null) {
+      _callbacks = callbacks;
+      logInfo('Custom callbacks registered');
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -144,9 +168,7 @@ class AuthyraClient with AuthyraLogging {
       await _sessionManager.initialize();
       _initialized = true;
       final count = _sessionManager.accountCount;
-      logInfo(count > 0
-          ? 'AuthyraClient ready — $count account(s) restored'
-          : 'AuthyraClient ready');
+      logInfo(count > 0 ? 'AuthyraClient ready — $count account(s) restored' : 'AuthyraClient ready');
     } catch (e, stackTrace) {
       logError('Failed to initialize AuthyraClient', e, stackTrace);
       rethrow;
@@ -176,8 +198,7 @@ class AuthyraClient with AuthyraLogging {
   /// Throws [ProviderAlreadyRegisteredException] if the id is already in use.
   void registerProvider(AuthProvider provider) {
     if (provider.id.isEmpty) {
-      throw InvalidProviderConfigException(
-          provider.id, 'Provider id cannot be empty');
+      throw InvalidProviderConfigException(provider.id, 'Provider id cannot be empty');
     }
     if (_providerMap.containsKey(provider.id)) {
       throw ProviderAlreadyRegisteredException(provider.id);
@@ -214,9 +235,22 @@ class AuthyraClient with AuthyraLogging {
     String providerId, {
     Map<String, dynamic>? params,
   }) async {
+    final startTime = DateTime.now();
     _assertInitialized();
     try {
       logInfo('Sign in started — provider: $providerId');
+
+      // 🔴 CALLBACK: Before sign in
+      if (_callbacks != null) {
+        final result = await _callbacks!.onBeforeSignIn(providerId, params);
+        if (result.isDenied) {
+          throw AuthenticationFailedException(
+            result.errorMessage ?? 'Sign in denied by callback',
+            providerName: providerId,
+          );
+        }
+      }
+
       final provider = _findProvider(providerId);
 
       AuthValidators.validateSignInParams(providerId, params);
@@ -233,10 +267,33 @@ class AuthyraClient with AuthyraLogging {
       AuthValidators.validateUserData(user.toJson());
 
       // If the user already has a session, update it and switch to it.
-      final existing = await _sessionManager.getSession(user.id);
-      if (existing != null) {
+      final existingSession = await _sessionManager.getSession(user.id);
+      final isNewUser = existingSession == null;
+
+      // 🔴 CALLBACK: Before session create
+      if (_callbacks != null) {
+        final result = await _callbacks!.onBeforeSessionCreate(user, providerId);
+        if (result.isDenied) {
+          throw AuthenticationFailedException(
+            result.errorMessage ?? 'Session creation denied by callback',
+            providerName: providerId,
+          );
+        }
+      }
+
+      if (existingSession != null) {
         logInfo('Existing session found for ${user.id} — refreshing');
         await _refreshExistingSession(user, result, providerId);
+
+        // 🟢 EVENT: Sign in successful
+        final duration = DateTime.now().difference(startTime);
+        events.emit(SignInEvent(
+          user: user,
+          providerName: providerId,
+          isNewUser: false,
+          duration: duration,
+        ));
+
         return user;
       }
 
@@ -246,23 +303,53 @@ class AuthyraClient with AuthyraLogging {
         user: user,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
-        expiresAt: result.expiresAt ??
-            DateTime.now().add(config.tokenLifetimeDuration),
+        expiresAt: result.expiresAt ?? DateTime.now().add(config.tokenLifetimeDuration),
         createdAt: DateTime.now(),
         lastUsedAt: DateTime.now(),
       );
 
       await _sessionManager.saveSession(session, setAsActive: true);
+
+      // 🟢 EVENT: Session created
+      events.emit(SessionCreatedEvent(
+        session: session,
+        isNewUser: isNewUser,
+      ));
+
       logInfo('Sign in successful — user: ${user.id}');
       _emitAuthState(AuthState.authenticated(user));
+
+      // 🟢 EVENT: Sign in successful
+      final duration = DateTime.now().difference(startTime);
+      events.emit(SignInEvent(
+        user: user,
+        providerName: providerId,
+        isNewUser: isNewUser,
+        duration: duration,
+      ));
+
       return user;
     } on AuthException catch (e) {
       logError('Sign in failed', e);
       _emitAuthState(AuthState.error(e.message));
+
+      // 🟢 EVENT: Sign in failed
+      events.emit(SignInFailedEvent(
+        providerName: providerId,
+        errorMessage: e.message,
+        errorCode: e.code,
+      ));
       rethrow;
     } catch (e, stackTrace) {
       logError('Sign in failed unexpectedly', e, stackTrace);
       _emitAuthState(AuthState.error(e.toString()));
+
+      // 🟢 EVENT: Sign in failed
+      events.emit(SignInFailedEvent(
+        providerName: providerId,
+        errorMessage: e.toString(),
+      ));
+
       throw AuthyraErrorHandler.handleError(e, stackTrace);
     }
   }
@@ -288,6 +375,19 @@ class AuthyraClient with AuthyraLogging {
         return;
       }
 
+      // 🔴 CALLBACK: Before sign out
+      if (_callbacks != null) {
+        final result = await _callbacks!.onBeforeSignOut(session.user);
+        if (result.isDenied) {
+          throw AuthenticationFailedException(
+            result.errorMessage ?? 'Sign out denied by callback',
+            providerName: session.providerId,
+          );
+        }
+      }
+
+      final sessionDuration = DateTime.now().difference(session.createdAt);
+
       // Attempt server-side token revocation.
       final provider = _providerMap[session.providerId];
       if (provider != null && provider.supportsSignOut) {
@@ -304,10 +404,14 @@ class AuthyraClient with AuthyraLogging {
       await _sessionManager.clearActiveSession();
       logInfo('Signed out — user: ${session.user.id}');
 
+      // 🟢 EVENT: Sign out successful
+      events.emit(SignOutEvent(
+        user: session.user,
+        sessionDuration: sessionDuration,
+      ));
+
       final next = _sessionManager.activeSession;
-      _emitAuthState(next != null
-          ? AuthState.authenticated(next.user)
-          : AuthState.unauthenticated());
+      _emitAuthState(next != null ? AuthState.authenticated(next.user) : AuthState.unauthenticated());
     } catch (e, stackTrace) {
       logError('Sign out failed', e, stackTrace);
       throw AuthyraErrorHandler.handleError(e, stackTrace);
@@ -494,3 +598,5 @@ class AuthyraClient with AuthyraLogging {
     if (!_initialized) throw NotInitializedException();
   }
 }
+
+// Un système d'interception avant (callbacks) et de notification après (events) pour une architecture extensible.
