@@ -1,64 +1,66 @@
-docs/
-├── README.md                              # Landing page — what Authyra is and why
-├── getting-started/
-│   ├── installation.md                    # pubspec setup for authyra and authyra_flutter
-│   ├── quick-start.md                     # Minimal working app in < 20 lines
-│   ├── configuration.md                   # AuthConfig options (autoRefresh, tokenLifetime…)
-│   └── first-auth.md                      # Email/password sign-in end to end
+docs/content/
+├── index.md                               # Landing page — what Authyra is and why
+├── changelog.md
+├── 8.troubleshooting.md
+├── 9.faq.md
 │
-├── core-concepts/
-│   ├── architecture.md                    # Two-layer design: AuthyraClient vs AuthyraInstance
-│   ├── providers.md                       # AuthProvider interface and strategy types
-│   ├── sessions.md                        # AuthSession lifecycle, expiry, shouldRefresh
-│   ├── storage.md                         # AuthStorage contract and security guidance
-│   └── reactivity.md                      # authStateChanges stream + synchronous cache
+├── 1.getting-started/
+│   ├── 2.introduction.md                  # Deux packages, trois principes
+│   ├── 3.installation.md                  # pubspec setup pour authyra et authyra_flutter
+│   ├── 4.quick-start.md                   # App minimale < 20 lignes
+│   ├── 5.configuration.md                 # AuthConfig (autoRefresh, tokenLifetime…)
+│   └── 6.first-auth.md                    # Email/password sign-in de bout en bout
 │
-├── providers/
-│   ├── credentials.md                     # CredentialsProvider — basic and .withTokens
-│   ├── oauth2.md                          # OAuth2Provider — PKCE, config, deep-link wiring
-│   ├── google.md                          # GoogleProvider — setup, scopes, redirect URI
-│   ├── github.md                          # GitHubOAuth2Provider
-│   ├── apple.md                           # AppleProvider — Sign in with Apple
-│   └── proxy-oauth.md                     # ProxyOAuthProvider — backend-delegated flow
+├── 2.core-concepts/
+│   ├── 1.architecture.md                  # Two-layer design: AuthyraClient vs AuthyraInstance
+│   ├── 2.providers.md                     # AuthProvider interface et types de stratégie
+│   ├── 3.sessions.md                      # AuthSession lifecycle, expiry, shouldRefresh
+│   ├── 4.storage.md                       # AuthStorage contrat et sécurité
+│   ├── 5.reactivity.md                    # authStateChanges stream + cache synchrone
+│   ├── 6.callbacks.md                     # AuthCallbacks middleware — bloquer/autoriser avant action
+│   └── 7.events.md                        # AuthEventBus — écouter après action (SignInEvent…)
 │
-├── guides/
-│   ├── email-auth.md                      # Full email/password flow with JWT backend
-│   ├── oauth2-flow.md                     # Custom OAuth2 provider (Discord, LinkedIn…)
-│   ├── deep-links.md                      # OAuth2CallbackHandler wiring (app_links)
-│   ├── token-refresh.md                   # Silent refresh, retry policy, forced re-auth
-│   ├── multi-account.md                   # AccountManager — switch, sign out, clean
-│   ├── route-protection.md                # GoRouter guard + AuthGuard widget
-│   ├── custom-provider.md                 # Implementing AuthProvider from scratch
-│   ├── custom-storage.md                  # Implementing AuthStorage (Redis, encrypted file…)
-│   └── testing.md                         # AuthyraClient with InMemoryStorage in tests
+├── 3.providers/
+│   ├── 1.credentials.md                   # CredentialsProvider — basic et .withTokens
+│   ├── 2.oauth2.md                        # OAuth2Provider — PKCE, config, deep-link
+│   ├── 3.google.md                        # GoogleProvider — setup, scopes, redirect URI
+│   ├── 4.github.md                        # GitHubProvider — config, scopes
+│   ├── 5.apple.md                         # AppleProvider — Sign in with Apple
+│   └── 6.proxy-oauth.md                   # ProxyOAuthProvider — backend-delegated flow
 │
-├── flutter/
-│   ├── setup.md                           # authyra_flutter initialization at app startup
-│   ├── secure-storage.md                  # SecureAuthStorage (Keychain / Keystore)
-│   ├── auth-guard.md                      # AuthGuard widget — gate UI on AuthState
-│   ├── auth-builder.md                    # AuthBuilder — reactive stream-based builder
-│   ├── router-guard.md                    # GoRouter / auto_route redirect integration
-│   └── app-binding.md                     # AuthyraAppBinding — pause refresh in background
+├── 4.guides/
+│   ├── 1.email-auth.md                    # Flow complet email/password avec JWT backend
+│   ├── 2.oauth2-flow.md                   # Provider OAuth2 custom (Discord, LinkedIn…)
+│   ├── 3.deep-links.md                    # OAuth2CallbackHandler wiring (app_links)
+│   ├── 4.token-refresh.md                 # Silent refresh, retry policy, forced re-auth
+│   ├── 5.multi-account.md                 # AccountManager — switch, signOut, clean
+│   ├── 6.route-protection.md              # GoRouter guard + RequireAuth widget
+│   ├── 7.custom-provider.md               # Implémenter AuthProvider from scratch
+│   ├── 8.custom-storage.md                # Implémenter AuthStorage (Redis, fichier chiffré…)
+│   └── 9.testing.md                       # AuthyraClient + InMemoryStorage dans les tests
 │
-├── api-reference/
-│   ├── authyra-client.md                  # AuthyraClient — all public methods
-│   ├── authyra-instance.md                # AuthyraInstance (Authyra typedef) — singleton API
-│   ├── account-manager.md                 # AccountManager — multi-account API
-│   ├── auth-provider.md                   # AuthProvider abstract interface
-│   ├── auth-storage.md                    # AuthStorage abstract interface
-│   ├── auth-session.md                    # AuthSession — fields, refreshed(), isExpired
-│   ├── auth-state.md                      # AuthState — type enum, user, error
-│   └── auth-exceptions.md                 # Exception hierarchy
+├── 5.flutter/
+│   ├── 1.setup.md                         # Initialisation authyra_flutter au démarrage
+│   ├── 2.secure-storage.md                # SecureAuthStorage (Keychain / Keystore)
+│   ├── 3.widgets.md                       # RequireAuth, RequireRole, AuthyraBuilder
+│   ├── 4.router-guard.md                  # AuthyraGuard GoRouter / auto_route
+│   └── 5.app-binding.md                   # AuthyraAppBinding — pause refresh en background
 │
-├── examples/
-│   ├── flutter-app.md                     # Full Flutter app: email + Google sign-in
-│   ├── dart-backend.md                    # Shelf/Dart Frog backend with authyra core
-│   └── testing-setup.md                   # Test suite setup with InMemoryStorage
+├── 6.api-reference/
+│   ├── 1.authyra-client.md                # AuthyraClient — toutes les méthodes publiques
+│   ├── 2.authyra-instance.md              # AuthyraInstance (alias Authyra) — singleton API
+│   ├── 3.account-manager.md               # AccountManager — API multi-compte
+│   ├── 4.auth-provider.md                 # AuthProvider interface abstraite
+│   ├── 5.auth-storage.md                  # AuthStorage interface abstraite
+│   ├── 6.auth-session.md                  # AuthSession — champs, refreshed(), isExpired
+│   ├── 7.auth-state.md                    # AuthState — type enum, user, error
+│   └── 8.auth-exceptions.md              # Hiérarchie des exceptions
 │
-├── migration/
-│   ├── from-firebase.md                   # Firebase Auth → Authyra mapping
-│   └── from-supabase.md                   # Supabase Auth → Authyra mapping
+├── 7.examples/
+│   ├── 1.flutter-app.md                   # App Flutter complète: email + Google sign-in
+│   ├── 2.dart-backend.md                  # Shelf/Dart Frog backend avec authyra core
+│   └── 3.testing-setup.md                 # Setup suite de tests avec InMemoryStorage
 │
-├── troubleshooting.md                     # Common errors and fixes
-├── faq.md                                 # Frequently asked questions
-└── changelog.md                           # Version history
+└── 10.migration/
+    ├── 1.from-firebase.md                 # Firebase Auth → Authyra mapping
+    └── 2.from-supabase.md                 # Supabase Auth → Authyra mapping

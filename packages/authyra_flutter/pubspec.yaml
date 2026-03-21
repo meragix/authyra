@@ -17,7 +17,8 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  authyra: ^0.1.0
+  authyra:
+    path: ../authyra
   dio: ^5.9.1
   crypto: ^3.0.7
   url_launcher: ^6.3.2
