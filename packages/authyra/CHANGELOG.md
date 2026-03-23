@@ -44,4 +44,4 @@ All notable changes to the `authyra` package are documented here.
 - `AuthProvider` abstract interface with `CredentialsProvider` implementation.
 - `AuthStorage` abstract interface for pluggable session persistence.
 - `SessionManager` with multi-account registry.
-- `AuthUser`, `AuthSession`, `AuthState`, `AuthConfig`, `SessionRegistry` models:
+- `AuthUser`, `AuthSession`, `AuthState`, `AuthConfig`, `SessionRegistry` models
