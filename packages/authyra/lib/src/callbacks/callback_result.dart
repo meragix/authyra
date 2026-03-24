@@ -26,7 +26,7 @@ class CallbackResult {
 
   /// Arbitrary data attached to this result.
   ///
-  /// Can be used to pass context from a hook back to the caller — for example,
+  /// Can be used to pass context from a hook back to the caller; for example,
   /// a [SessionMetadata] map populated in [AuthCallbacks.onBeforeSessionCreate].
   final Map<String, dynamic>? data;
 

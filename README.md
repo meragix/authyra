@@ -1,6 +1,6 @@
 # Authyra
 
-Authentication framework for Dart and Flutter. Handles the full auth lifecycle — session persistence, token refresh, multi-account — without locking you into a backend or a UI framework.
+Authentication framework for Dart and Flutter. Handles the full auth lifecycle: session persistence, token refresh, multi-account; without locking you into a backend or a UI framework.
 
 [![pub.dev](https://img.shields.io/pub/v/authyra.svg)](https://pub.dev/packages/authyra)
 [![pub.dev flutter](https://img.shields.io/pub/v/authyra_flutter.svg?label=authyra_flutter)](https://pub.dev/packages/authyra_flutter)
@@ -12,11 +12,11 @@ Authentication framework for Dart and Flutter. Handles the full auth lifecycle �
 
 | Package | Description |
 |---|---|
-| [`authyra`](packages/authyra) | Core framework — pure Dart, zero Flutter dependency |
-| [`authyra_flutter`](packages/authyra_flutter) | Flutter layer — OAuth2, widgets, GoRouter guard |
+| [`authyra`](packages/authyra) | Core framework: pure Dart, zero Flutter dependency |
+| [`authyra_flutter`](packages/authyra_flutter) | Flutter layer: OAuth2, widgets, GoRouter guard |
 
 **Use `authyra` alone** for Dart backends (Shelf, Dart Frog) or CLI tools.
-**Use `authyra_flutter`** for Flutter apps — it re-exports the entire core so you only ever need one import.
+**Use `authyra_flutter`** for Flutter apps: it re-exports the entire core so you only ever need one import.
 
 ---
 
@@ -42,7 +42,10 @@ void main() async {
         CredentialsProvider.withTokens(
           id: 'email',
           authorize: (creds) async {
-            final res = await myApi.post('/auth/login', body: creds);
+            final res = await myApi.post('/auth/login', body: {
+              'email': creds?.email,
+              'password': creds?.password,
+            });
             if (res.statusCode != 200) return null;
             return AuthSignInResult(
               user: AuthUser(id: res.data['id'], email: res.data['email']),
@@ -63,11 +66,11 @@ void main() async {
 ```
 
 ```dart
-// Anywhere in your app
-await Authyra.instance.signIn('email', params: {
-  'email': 'alice@example.com',
-  'password': 's3cr3t',
-});
+// Sign in
+await Authyra.instance.signIn('email', params: CredentialsSignInParams(
+  email: 'alice@example.com',
+  password: 's3cr3t',
+));
 
 // Reactive UI
 StreamBuilder<AuthState>(
@@ -93,7 +96,10 @@ final client = AuthyraClient(
   providers: [
     CredentialsProvider.withTokens(
       id: 'email',
-      authorize: (creds) async { /* validate against your DB */ },
+      authorize: (creds) async {
+        // validate against your DB
+        return AuthSignInResult(user: AuthUser(id: '...', email: creds?.email ?? ''));
+      },
     ),
   ],
   storage: MyRedisStorage(),
@@ -101,10 +107,10 @@ final client = AuthyraClient(
 
 await client.initialize();
 
-final user = await client.signIn('email', params: {
-  'email': 'alice@example.com',
-  'password': 's3cr3t',
-});
+final user = await client.signIn('email', params: CredentialsSignInParams(
+  email: 'alice@example.com',
+  password: 's3cr3t',
+));
 ```
 
 ---
@@ -121,9 +127,10 @@ packages/
 
 ```text
 AuthyraClient          ← stateless orchestrator (injectable, testable)
-    └── SessionManager ← CRUD + multi-account registry
+    └── SessionManager ← CRUD + multi-account registry + proactive token refresh
     └── AuthProvider   ← pluggable auth strategy (credentials / OAuth2 / custom)
     └── AuthStorage    ← pluggable persistence (you own the implementation)
+    └── AuthyraPlugin  ← lifecycle hooks (onBeforeSignIn, onAfterSignIn, onSessionExpired)
 
 AuthyraInstance        ← singleton wrapper (reactive streams + sync state cache)
 ```
@@ -135,12 +142,62 @@ AuthyraInstance        ← singleton wrapper (reactive streams + sync state cach
 | Provider | Package | Strategy |
 |---|---|---|
 | `CredentialsProvider` | `authyra` | Email/password or any form-based flow |
-| `CredentialsProvider.withTokens` | `authyra` | JWT backend — stores access + refresh tokens |
+| `CredentialsProvider.withTokens` | `authyra` | JWT backend: stores access + refresh tokens |
 | `OAuth2Provider` | `authyra_flutter` | Authorization Code + PKCE (any IdP) |
 | `GoogleProvider` | `authyra_flutter` | Prebuilt Google Sign-In |
 | `GitHubOAuth2Provider` | `authyra_flutter` | Prebuilt GitHub OAuth |
 | `AppleProvider` | `authyra_flutter` | Sign in with Apple |
 | `ProxyOAuthProvider` | `authyra_flutter` | Backend-delegated OAuth (client secret stays server-side) |
+
+---
+
+## Events
+
+```dart
+client.events.on<SignInEvent>((e) {
+  analytics.track('sign_in', {'provider': e.providerName});
+});
+
+client.events.on<TokenRefreshEvent>((e) {
+  if (!e.success) showReAuthPrompt();
+});
+
+// All events as a raw stream (audit logging, etc.)
+client.events.stream.listen((e) => auditLog.write(e.toJson()));
+```
+
+---
+
+## Plugins
+
+```dart
+final client = AuthyraClient(
+  providers: [...],
+  storage: SecureAuthStorage(),
+  plugins: [
+    RateLimitPlugin(maxAttempts: 5, window: Duration(minutes: 15)),
+    AuditLogPlugin(logger: myLogger),
+  ],
+);
+```
+
+```dart
+class RateLimitPlugin extends AuthyraPlugin {
+  @override String get name => 'rate-limit';
+
+  @override
+  void install(AuthyraClient client) {
+    // wire up client references if needed
+  }
+
+  @override
+  Future<void> onBeforeSignIn(String providerId, AuthSignInParams? params) async {
+    if (_isRateLimited(providerId)) {
+      throw AuthenticationFailedException('Too many attempts. Try again later.');
+    }
+  }
+}
+```
 
 ---
 

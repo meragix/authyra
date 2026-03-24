@@ -38,7 +38,7 @@ import 'package:authyra/src/models/session_metadata.dart';
 /// new session via [copyWith] with a different [activeAccountId].
 ///
 /// ```dart
-/// // Reading the active token — transparently reads from activeAccount.
+/// // Reading the active token: transparently reads from activeAccount.
 /// final token = session.accessToken;
 ///
 /// // Checking expiry.

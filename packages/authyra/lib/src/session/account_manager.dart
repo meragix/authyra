@@ -62,7 +62,7 @@ class AccountManager with AuthyraLogging {
 
   /// Returns all signed-in users, sorted by most recently used.
   ///
-  /// The list reflects only the in-memory registry — no storage round-trip
+  /// The list reflects only the in-memory registry; no storage round-trip
   /// is made. Returns an empty list when no accounts are registered.
   ///
   /// ```dart
@@ -89,7 +89,7 @@ class AccountManager with AuthyraLogging {
   /// ```dart
   /// final sessions = await Authyra.instance.accounts.getAllSessions();
   /// for (final s in sessions) {
-  ///   print('${s.user.email} — expires in ${s.timeUntilExpiration}');
+  ///   print('${s.user.email}: expires in ${s.timeUntilExpiration}');
   /// }
   /// ```
   Future<List<AuthSession>> getAllSessions() async {
@@ -143,7 +143,7 @@ class AccountManager with AuthyraLogging {
   /// } on AccountNotFoundException {
   ///   showError('Account not found');
   /// } on TokenExpiredException {
-  ///   showError('Session expired — please sign in again');
+  ///   showError('Session expired: please sign in again');
   /// }
   /// ```
   Future<void> switchTo(String userId) async {

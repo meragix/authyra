@@ -6,18 +6,18 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 ///
 /// [JwtUtils] covers three use cases:
 ///
-/// 1. **Reading** — decode any JWT and extract standard or custom claims
+/// 1. **Reading**: decode any JWT and extract standard or custom claims
 ///    without verifying the signature (useful when you already trust the
 ///    source, e.g., a token received over HTTPS from a verified OAuth2
 ///    endpoint).
 ///
-/// 2. **Verifying** — cryptographically verify a token before trusting its
+/// 2. **Verifying**: cryptographically verify a token before trusting its
 ///    claims (e.g., an OIDC `id_token` from Apple or Google).
 ///
-/// 3. **Generating** — create signed JWTs, in particular the ES256 client
+/// 3. **Generating**: create signed JWTs, in particular the ES256 client
 ///    secret required by [AppleProvider].
 ///
-/// All methods are **static** — [JwtUtils] is a pure-function namespace, not
+/// All methods are **static**: [JwtUtils] is a pure-function namespace, not
 /// a class to instantiate.
 ///
 /// ## Basic usage
@@ -35,9 +35,9 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 ///
 /// // Generate Apple's client_secret
 /// final secret = JwtUtils.generateAppleClientSecret(
-///   teamId:        'XXXXXXXXXX',
-///   clientId:      'com.example.app',
-///   keyId:         'YYYYYYYYYY',
+///   teamId: 'XXXXXXXXXX',
+///   clientId: 'com.example.app',
+///   keyId: 'YYYYYYYYYY',
 ///   privateKeyPem: File('AuthKey_YYYYYYYYYY.p8').readAsStringSync(),
 /// );
 /// ```
@@ -59,8 +59,8 @@ abstract final class JwtUtils {
   ///
   /// ```dart
   /// final claims = JwtUtils.decodePayload(idToken);
-  /// final userId  = claims['sub'] as String;
-  /// final email   = claims['email'] as String?;
+  /// final userId = claims['sub'] as String;
+  /// final email = claims['email'] as String?;
   /// ```
   ///
   /// Throws [JWTException] if the token is malformed (not a valid JWT).
@@ -292,9 +292,9 @@ abstract final class JwtUtils {
   ///
   /// ```dart
   /// final clientSecret = JwtUtils.generateAppleClientSecret(
-  ///   teamId:        'AB12CD34EF',
-  ///   clientId:      'com.example.app',          // Services ID
-  ///   keyId:         'XYZXYZXYZX',
+  ///   teamId: 'AB12CD34EF',
+  ///   clientId: 'com.example.app',          // Services ID
+  ///   keyId: 'XYZXYZXYZX',
   ///   privateKeyPem: '''
   ///     -----BEGIN PRIVATE KEY-----
   ///     MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgevZzL1gdAFr88hih
@@ -305,7 +305,7 @@ abstract final class JwtUtils {
   /// ```
   ///
   /// The generated secret can be cached and reused until it is close to
-  /// expiring — there is no need to regenerate it per request.
+  /// expiring; there is no need to regenerate it per request.
   ///
   /// See also:
   /// - [Apple documentation](https://developer.apple.com/documentation/sign_in_with_apple/generate_and_validate_tokens)
@@ -326,7 +326,7 @@ abstract final class JwtUtils {
     // Build the JWT with Apple-required claims.
     // `iat` is injected automatically by sign() (noIssueAt defaults to false).
     final jwt = JWT(
-      <String, dynamic>{}, // Additional payload fields — not needed for Apple
+      <String, dynamic>{}, // Additional payload fields: not needed for Apple
       header: <String, dynamic>{'kid': keyId},
       issuer: teamId,
       subject: clientId,

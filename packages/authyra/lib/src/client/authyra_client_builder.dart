@@ -78,7 +78,7 @@ class AuthyraClientBuilder {
   /// Sets the storage backend used to persist sessions across app restarts.
   ///
   /// Required; [build] throws [InvalidConfigurationException] if omitted.
-  /// Pass an encrypted implementation — never use plaintext storage for tokens.
+  /// Pass an encrypted implementation; never use plaintext storage for tokens.
   ///
   /// Returns `this` for chaining.
   ///

@@ -3,7 +3,7 @@ import 'package:authyra/src/interfaces/auth_storage.dart';
 /// An in-memory [AuthStorage] implementation for tests and server-side use.
 ///
 /// All data is stored in a plain `Map<String, String>`. Nothing is persisted
-/// to disk — the store is cleared when the object is garbage collected or when
+/// to disk; the store is cleared when the object is garbage collected or when
 /// [clear] is called explicitly.
 ///
 /// ## Usage
@@ -30,10 +30,10 @@ import 'package:authyra/src/interfaces/auth_storage.dart';
 ///
 /// ## Limitations
 ///
-/// - **Not persistent** — sessions are lost on process restart or when the
+/// - **Not persistent**: sessions are lost on process restart or when the
 ///   instance is discarded. Use `SecureAuthStorage` (Flutter) or a custom
 ///   encrypted backend for production.
-/// - **Not thread-safe** — avoid sharing a single instance across isolates.
+/// - **Not thread-safe**: avoid sharing a single instance across isolates.
 ///
 /// See also:
 /// - [AuthStorage], the interface this class implements.
@@ -47,7 +47,7 @@ class InMemoryStorage implements AuthStorage {
 
   @override
   Future<void> initialize() async {
-    // Nothing to initialise — the in-memory map is ready immediately.
+    // Nothing to initialise; the in-memory map is ready immediately.
   }
 
   @override

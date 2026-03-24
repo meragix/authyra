@@ -51,7 +51,7 @@ typedef AuthorizeWithTokensCallback = Future<AuthSignInResult?> Function(
 
 /// Authentication provider for email + password (or any custom credentials).
 ///
-/// Delegates credential validation to a callback supplied at construction —
+/// Delegates credential validation to a callback supplied at construction:
 /// you own the logic and connect it to any backend.
 ///
 /// ## Basic usage (user profile only)
@@ -123,7 +123,7 @@ class CredentialsProvider with AuthyraLogging implements AuthProvider {
   /// Creates a [CredentialsProvider] with a token-aware callback.
   ///
   /// Use this when your backend returns access and refresh tokens in the
-  /// login response — ensures Authyra stores them in the session.
+  /// login response; ensures Authyra stores them in the session.
   CredentialsProvider.withTokens({
     required String id,
     required AuthorizeWithTokensCallback authorize,
