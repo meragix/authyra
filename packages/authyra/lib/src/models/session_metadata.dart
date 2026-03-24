@@ -3,7 +3,7 @@ import 'package:equatable/equatable.dart';
 /// Optional contextual metadata attached to an [AuthSession].
 ///
 /// [SessionMetadata] captures device and network context at session creation
-/// time. It is intentionally passive — Authyra never reads these values
+/// time. It is intentionally passive; Authyra never reads these values
 /// internally; they are surfaced to consumers (e.g., audit logs, fraud
 /// detection, device management UIs).
 ///
@@ -45,6 +45,11 @@ class SessionMetadata extends Equatable {
   /// Example: `'FR'` for France, `'US'` for United States.
   final String? country;
 
+  /// Creates a [SessionMetadata].
+  ///
+  /// All fields are optional. Supply only the fields available in your runtime
+  /// environment; a Flutter app may provide [deviceId] but not [ipAddress],
+  /// while a Shelf backend may provide [ipAddress] and [userAgent] but not [deviceId].
   const SessionMetadata({
     this.ipAddress,
     this.userAgent,

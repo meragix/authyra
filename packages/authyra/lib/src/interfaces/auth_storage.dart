@@ -1,7 +1,7 @@
 /// Pluggable storage interface for Authyra session persistence.
 ///
 /// [AuthStorage] is the **single storage abstraction** used throughout Authyra.
-/// The core package deliberately ships **no concrete implementation** — consumers
+/// The core package deliberately ships **no concrete implementation**; consumers
 /// provide a backend suited to their runtime environment:
 ///
 /// | Runtime       | Recommended backend                              |
@@ -62,7 +62,7 @@ abstract class AuthStorage {
   /// Performs any one-time initialisation required by this storage backend.
   ///
   /// Must be called and awaited before any other method on this instance.
-  /// Implementations should be **idempotent** — repeated calls must be safe
+  /// Implementations should be **idempotent**; repeated calls must be safe
   /// and should not reinitialise state or corrupt existing data.
   ///
   /// Common tasks performed here:
@@ -77,14 +77,14 @@ abstract class AuthStorage {
   /// Reads and returns the UTF-8 string value associated with [key].
   ///
   /// Returns `null` if [key] does not exist in the store. Never throws for a
-  /// missing key — use [containsKey] first if presence matters.
+  /// missing key; use [containsKey] first if presence matters.
   Future<String?> read(String key);
 
   /// Persists [value] under [key], overwriting any existing value.
   ///
   /// [value] is typically a JSON-encoded string produced by
   /// [SessionRegistry.toJson]. The implementation must guarantee
-  /// **durability** — the write must survive process restarts and OS-level
+  /// **durability**; the write must survive process restarts and OS-level
   /// power events.
   Future<void> write(String key, String value);
 
@@ -97,7 +97,7 @@ abstract class AuthStorage {
   /// Removes **all** entries managed by this storage instance.
   ///
   /// This is a destructive, irreversible operation that permanently erases all
-  /// authentication data — including tokens for every signed-in account. Call
+  /// authentication data; including tokens for every signed-in account. Call
   /// only during a full sign-out-all flow or a factory reset.
   Future<void> clear();
 

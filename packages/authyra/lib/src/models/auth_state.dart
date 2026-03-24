@@ -10,7 +10,7 @@ import 'package:authyra/src/models/auth_user.dart';
 /// ## Usage in reactive UIs
 ///
 /// Because [AuthState] implements value equality via [Equatable], identical
-/// consecutive states are deduplicated in streams — preventing unnecessary
+/// consecutive states are deduplicated in streams; preventing unnecessary
 /// widget rebuilds or side-effect re-executions.
 ///
 /// ```dart

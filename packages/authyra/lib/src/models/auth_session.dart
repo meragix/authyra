@@ -85,7 +85,7 @@ class AuthSession extends Equatable {
   /// Optional device and network context captured at session creation.
   ///
   /// Populated via [AuthCallbacks.onBeforeSessionCreate]. Never read
-  /// internally by Authyra — surfaced to consumers for audit logs,
+  /// internally by Authyra; surfaced to consumers for audit logs,
   /// fraud detection, or device management UIs.
   final SessionMetadata? metadata;
 
@@ -182,7 +182,10 @@ class AuthSession extends Equatable {
   /// Whether a refresh token is available to renew the access token silently.
   bool get canRefresh => refreshToken != null && refreshToken!.isNotEmpty;
 
-  /// The session's expiry time, or [DateTime.now] if no expiry is recorded.
+  /// The session's expiry time, or [DateTime.now] if no expiry is set.
+  ///
+  /// Use this when you need a non-nullable timestamp for sorting or scheduling,
+  /// but cannot assume an expiry exists (e.g., cookie-based sessions).
   DateTime get expirationOrNow => expiresAt ?? DateTime.now();
 
   /// Set of provider IDs linked to this account.
@@ -197,7 +200,9 @@ class AuthSession extends Equatable {
   Set<String> get linkedProviderIds =>
       linkedAccounts.map((a) => a.providerId).toSet();
 
-  /// Whether [providerId] is linked to this account.
+  /// Whether the provider identified by [providerId] is linked to this account.
+  ///
+  /// Shorthand for `linkedProviderIds.contains(providerId)`.
   bool hasLinkedProvider(String providerId) =>
       linkedProviderIds.contains(providerId);
 
@@ -289,7 +294,7 @@ class AuthSession extends Equatable {
   /// Serialises this session to a JSON-compatible map.
   ///
   /// Timestamps are encoded as ISO 8601 strings. [accessToken] and
-  /// [refreshToken] are included — ensure the output is stored securely
+  /// [refreshToken] are included; ensure the output is stored securely
   /// (encrypted storage, never plain localStorage in browser environments).
   Map<String, dynamic> toJson() => {
         'providerId': providerId,

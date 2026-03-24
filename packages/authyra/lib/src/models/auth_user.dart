@@ -3,7 +3,7 @@ import 'package:equatable/equatable.dart';
 /// Represents an authenticated user within the Authyra framework.
 ///
 /// [AuthUser] is an **immutable value object** capturing identity and profile
-/// data returned by an authentication provider. It is intentionally minimal —
+/// data returned by an authentication provider. It is intentionally minimal;
 /// provider-specific or domain-specific fields belong in [metadata].
 ///
 /// ## Value equality
@@ -35,7 +35,7 @@ class AuthUser extends Equatable {
   ///
   /// This is the canonical key used across [SessionRegistry] and for
   /// cache namespacing (see [AuthSession.namespaceKey]). Must be non-empty
-  /// and stable across sessions — never reassigned by the provider.
+  /// and stable across sessions; never reassigned by the provider.
   final String id;
 
   /// Primary email address, if disclosed by the provider.
@@ -95,7 +95,7 @@ class AuthUser extends Equatable {
   /// Resolves the best available display name for this user.
   ///
   /// Priority order: [name] → [email] → `'User $id'`.
-  /// Never returns `null` — safe to render directly in UI.
+  /// Never returns `null`; safe to render directly in UI.
   String get displayName => name ?? email ?? 'User $id';
 
   /// Two-letter initials derived from [name] or [email], for avatar fallbacks.
@@ -163,7 +163,7 @@ class AuthUser extends Equatable {
   /// Serialises this user to a JSON-compatible map.
   ///
   /// All scalar values are primitives or `null`. [metadata] is included
-  /// as-is — ensure its contents are JSON-serialisable before calling this.
+  /// as-is; ensure its contents are JSON-serialisable before calling this.
   ///
   /// ```dart
   /// final json = user.toJson();

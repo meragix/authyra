@@ -3,13 +3,13 @@ import 'package:equatable/equatable.dart';
 /// Represents a provider-linked account entry for an [AuthUser].
 ///
 /// An [AuthAccount] records the *relationship* between a user and a specific
-/// authentication provider — including the provider's own identifier for the
+/// authentication provider, including the provider's own identifier for the
 /// user and any token data returned at sign-in time.
 ///
 /// ## Why this model exists
 ///
 /// [AuthSession] is the *session* container (active tokens, expiry). [AuthAccount]
-/// is the *identity link* — it answers "which Google account is this user?" and
+/// is the *identity link*; it answers "which Google account is this user?" and
 /// stores the `provider_account_id` (e.g., Google `sub`, GitHub login), enabling
 /// proper account-linking in future versions: one [AuthUser] can have multiple
 /// [AuthAccount] entries, one per provider.
@@ -78,6 +78,11 @@ class AuthAccount extends Equatable {
   /// ```
   final Map<String, dynamic> providerData;
 
+  /// Creates an [AuthAccount].
+  ///
+  /// [id], [userId], [providerId], and [providerAccountId] are required.
+  /// Token fields are optional; they may be absent for providers that manage
+  /// tokens server-side or for accounts that were linked without a fresh sign-in.
   const AuthAccount({
     required this.id,
     required this.userId,
@@ -90,6 +95,10 @@ class AuthAccount extends Equatable {
   });
 
   /// Returns a copy of this account with the specified fields replaced.
+  ///
+  /// Unspecified fields retain their current values. Because [AuthAccount] is
+  /// immutable, this is the only way to derive a modified instance; for
+  /// example, to update token data after a provider-side token refresh.
   AuthAccount copyWith({
     String? id,
     String? userId,
@@ -113,6 +122,9 @@ class AuthAccount extends Equatable {
   }
 
   /// Serialises this account to a JSON-compatible map.
+  ///
+  /// Timestamps are encoded as ISO 8601 strings. Token fields are included
+  /// as-is; store the output in an encrypted backend (see [AuthStorage]).
   Map<String, dynamic> toJson() => {
         'id': id,
         'userId': userId,
@@ -125,6 +137,10 @@ class AuthAccount extends Equatable {
       };
 
   /// Deserialises an [AuthAccount] from a JSON map.
+  ///
+  /// Throws a [TypeError] if required string fields (`id`, `userId`,
+  /// `providerId`, `providerAccountId`) are missing or have the wrong type.
+  /// Optional fields default to `null`; [providerData] defaults to an empty map.
   factory AuthAccount.fromJson(Map<String, dynamic> json) {
     return AuthAccount(
       id: json['id'] as String,

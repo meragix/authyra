@@ -1,14 +1,14 @@
 /// Typed parameter hierarchy for [AuthProvider.signIn].
 ///
 /// Each [AuthProvider] implementation declares which concrete subclass it
-/// expects. [AuthyraClient.signIn] forwards the params verbatim — cast to the
+/// expects. [AuthyraClient.signIn] forwards the params verbatim; cast to the
 /// expected type inside your provider.
 ///
 /// Built-in subclasses:
-/// - [CredentialsSignInParams] — email + password
-/// - [OAuth2SignInParams]      — post-redirect code + state
-/// - [MagicLinkSignInParams]   — passwordless email / token verification
-/// - [PhoneSignInParams]       — SMS OTP
+/// - [CredentialsSignInParams]: email + password
+/// - [OAuth2SignInParams]: post-redirect code + state
+/// - [MagicLinkSignInParams]: passwordless email / token verification
+/// - [PhoneSignInParams]: SMS OTP
 abstract class AuthSignInParams {
   const AuthSignInParams();
 }
@@ -71,10 +71,10 @@ class OAuth2SignInParams extends AuthSignInParams {
 /// During the *verification* phase, supply both [email] and [token].
 ///
 /// ```dart
-/// // Step 1 — send the link
+/// // Step 1: send the link
 /// await client.signIn('magic', params: MagicLinkSignInParams(email: 'alice@example.com'));
 ///
-/// // Step 2 — verify the token from the link
+/// // Step 2: verify the token from the link
 /// await client.signIn('magic', params: MagicLinkSignInParams(
 ///   email: 'alice@example.com',
 ///   token: tokenFromUrl,
@@ -96,10 +96,10 @@ class MagicLinkSignInParams extends AuthSignInParams {
 /// During the *verification* phase, supply both [phoneNumber] and [otp].
 ///
 /// ```dart
-/// // Step 1 — send the OTP
+/// // Step 1: send the OTP
 /// await client.signIn('phone', params: PhoneSignInParams(phoneNumber: '+33612345678'));
 ///
-/// // Step 2 — verify
+/// // Step 2: verify
 /// await client.signIn('phone', params: PhoneSignInParams(
 ///   phoneNumber: '+33612345678',
 ///   otp: '123456',

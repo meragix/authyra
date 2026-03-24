@@ -144,9 +144,9 @@ class AuthTokenResult {
 /// - [id] must be a unique, lowercase slug within a single [AuthyraClient].
 /// - [signIn] is the only **required** method; [signOut] and [refreshToken]
 ///   have safe default no-op implementations.
-/// - Providers are **stateless** — they hold configuration, not session state.
+/// - Providers are **stateless**: they hold configuration, not session state.
 ///   Session state lives in [SessionManager].
-/// - [signIn] accepts typed [AuthSignInParams] — cast to your expected subclass
+/// - [signIn] accepts typed [AuthSignInParams]; cast to your expected subclass
 ///   (e.g., [CredentialsSignInParams]) inside your override.
 ///
 /// ## Minimal example
@@ -201,7 +201,7 @@ abstract class AuthProvider {
   /// Unique identifier for this provider.
   ///
   /// Lowercase slug (e.g., `'google'`, `'credentials'`, `'github'`).
-  /// Must be unique within a single [AuthyraClient] — duplicate IDs are
+  /// Must be unique within a single [AuthyraClient]; duplicate IDs are
   /// rejected during registration.
   String get id;
 
@@ -220,7 +220,7 @@ abstract class AuthProvider {
   /// Whether this provider can renew an expired access token silently.
   ///
   /// When `true`, [AuthyraClient] will call [refreshToken] before prompting
-  /// the user to re-authenticate. Defaults to `false` — opt-in explicitly.
+  /// the user to re-authenticate. Defaults to `false`; opt-in explicitly.
   bool get supportsRefresh => false;
 
   /// Whether this provider requires a server-side call during sign-out.
@@ -247,16 +247,16 @@ abstract class AuthProvider {
   /// (network failure, CSRF mismatch, invalid provider config).
   ///
   /// **Always populate [AuthSignInResult.account] and token fields** when the
-  /// provider returns them — they are stored in the session and enable
+  /// provider returns them; they are stored in the session and enable
   /// account-linking and silent refresh.
   Future<AuthSignInResult?> signIn({AuthSignInParams? params});
 
   /// Revokes server-side credentials for [userId].
   ///
   /// Only called by [AuthyraClient] when [supportsSignOut] is `true`.
-  /// Default implementation is a no-op — override only when needed.
+  /// Default implementation is a no-op; override only when needed.
   ///
-  /// **Must never throw** — catch and log errors internally to avoid
+  /// **Must never throw**; catch and log errors internally to avoid
   /// blocking the local session cleanup.
   Future<void> signOut({String? userId}) async {}
 
