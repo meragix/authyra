@@ -16,12 +16,15 @@ export 'src/models/auth_session.dart';
 export 'src/models/auth_state.dart';
 export 'src/models/auth_config.dart';
 export 'src/models/auth_token_result.dart';
+export 'src/models/auth_account.dart';
+export 'src/models/session_metadata.dart';
 
 // ---------------------------------------------------------------------------
 // Interfaces (for custom implementations)
 // ---------------------------------------------------------------------------
 export 'src/interfaces/auth_provider.dart';
 export 'src/interfaces/auth_storage.dart';
+export 'src/interfaces/auth_sign_in_params.dart';
 
 // ---------------------------------------------------------------------------
 // Client
@@ -51,6 +54,18 @@ export 'src/exceptions/auth_exceptions.dart';
 export 'src/storage/memory_storage.dart';
 
 // ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+export 'src/events/auth_event_bus.dart';
+export 'src/events/auth_events.dart';
+
+// ---------------------------------------------------------------------------
+// Callbacks
+// ---------------------------------------------------------------------------
+export 'src/callbacks/auth_callbacks.dart';
+export 'src/callbacks/callback_result.dart';
+
+// ---------------------------------------------------------------------------
 // Convenience alias
 // ---------------------------------------------------------------------------
 
@@ -58,6 +73,6 @@ export 'src/storage/memory_storage.dart';
 ///
 /// ```dart
 /// await Authyra.initialize(client: client);
-/// Authyra.instance.signIn('google');
+/// Authyra.instance.signIn('google', params: OAuth2SignInParams(code: '...'));
 /// ```
 typedef Authyra = AuthyraInstance;

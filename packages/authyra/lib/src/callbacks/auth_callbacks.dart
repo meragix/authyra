@@ -1,4 +1,5 @@
 import 'package:authyra/src/callbacks/callback_result.dart';
+import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 import 'package:authyra/src/models/auth_user.dart';
 
 /// Callbacks are executed BEFORE an action
@@ -14,7 +15,7 @@ abstract class AuthCallbacks {
   /// - Verify device/browser
   Future<CallbackResult> onBeforeSignIn(
     String providerName,
-    Map<String, dynamic>? params,
+    AuthSignInParams? params,
   ) async {
     return const CallbackResult.allow();
   }

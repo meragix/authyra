@@ -1,11 +1,14 @@
 import 'package:equatable/equatable.dart';
+import 'package:authyra/src/models/auth_account.dart';
 import 'package:authyra/src/models/auth_user.dart';
+import 'package:authyra/src/models/session_metadata.dart';
 
 /// Represents an authenticated session containing tokens and user identity.
 ///
 /// [AuthSession] is an **immutable value object** that stores all
 /// authentication data for a single account: the associated [AuthUser],
-/// access/refresh tokens, expiry metadata, and linked provider identifiers.
+/// access/refresh tokens, expiry metadata, linked [AuthAccount] entries,
+/// and optional [SessionMetadata].
 ///
 /// ## Lifecycle
 ///
@@ -19,8 +22,8 @@ import 'package:authyra/src/models/auth_user.dart';
 /// ## Multi-provider support
 ///
 /// A single user can authenticate through multiple providers. The primary
-/// provider is stored in [providerId]; all linked providers are listed in
-/// [linkedProviders].
+/// provider is stored in [providerId]; all linked provider accounts are
+/// listed in [linkedAccounts].
 ///
 /// ```dart
 /// final session = AuthSession(
@@ -39,6 +42,8 @@ import 'package:authyra/src/models/auth_user.dart';
 ///
 /// See also:
 /// - [AuthUser], the identity payload embedded in every session.
+/// - [AuthAccount], the provider-linked account entries.
+/// - [SessionMetadata], the optional device/network context.
 /// - [SessionRegistry], the in-memory store for multi-account sessions.
 class AuthSession extends Equatable {
   /// Primary authentication provider identifier.
@@ -68,13 +73,21 @@ class AuthSession extends Equatable {
   /// rely on server-side enforcement).
   final DateTime? expiresAt;
 
-  /// All authentication providers linked to this account.
+  /// All provider-linked accounts for this user.
   ///
-  /// Includes [providerId] and any additional providers the user has
-  /// connected. Useful for rendering "connected accounts" UIs.
+  /// Each entry represents a provider that has been connected to this user.
+  /// The primary account (for [providerId]) is typically the first entry.
+  /// Additional entries are added via account-linking flows.
   ///
-  /// Example: `['google', 'github', 'email']`
-  final List<String> linkedProviders;
+  /// Use [linkedProviderIds] for a quick set of connected provider IDs.
+  final List<AuthAccount> linkedAccounts;
+
+  /// Optional device and network context captured at session creation.
+  ///
+  /// Populated via [AuthCallbacks.onBeforeSessionCreate]. Never read
+  /// internally by Authyra — surfaced to consumers for audit logs,
+  /// fraud detection, or device management UIs.
+  final SessionMetadata? metadata;
 
   /// UTC timestamp when this session was first created.
   final DateTime createdAt;
@@ -96,7 +109,8 @@ class AuthSession extends Equatable {
     this.accessToken,
     this.refreshToken,
     this.expiresAt,
-    this.linkedProviders = const [],
+    this.linkedAccounts = const [],
+    this.metadata,
     required this.createdAt,
     required this.lastUsedAt,
   });
@@ -139,9 +153,9 @@ class AuthSession extends Equatable {
   /// making it ergonomic in configuration-driven auto-refresh logic.
   ///
   /// ```dart
-  /// // Used internally by AuthyraClient's auto-refresh scheduler:
+  /// // Used internally by AuthyraClient's auto-refresh logic:
   /// if (session.shouldRefresh(threshold: config.refreshThreshold)) {
-  ///   await client.refresh(session);
+  ///   await client.refreshSession();
   /// }
   /// ```
   ///
@@ -168,14 +182,24 @@ class AuthSession extends Equatable {
   /// Whether a refresh token is available to renew the access token silently.
   bool get canRefresh => refreshToken != null && refreshToken!.isNotEmpty;
 
-  /// Whether [provider] is linked to this account.
+  /// The session's expiry time, or [DateTime.now] if no expiry is recorded.
+  DateTime get expirationOrNow => expiresAt ?? DateTime.now();
+
+  /// Set of provider IDs linked to this account.
+  ///
+  /// Convenience shorthand over [linkedAccounts].
   ///
   /// ```dart
-  /// if (session.hasLinkedProvider('github')) {
+  /// if (session.linkedProviderIds.contains('github')) {
   ///   showGitHubConnectionBadge();
   /// }
   /// ```
-  bool hasLinkedProvider(String provider) => linkedProviders.contains(provider);
+  Set<String> get linkedProviderIds =>
+      linkedAccounts.map((a) => a.providerId).toSet();
+
+  /// Whether [providerId] is linked to this account.
+  bool hasLinkedProvider(String providerId) =>
+      linkedProviderIds.contains(providerId);
 
   // ---------------------------------------------------------------------------
   // Cache / namespace helpers
@@ -240,7 +264,8 @@ class AuthSession extends Equatable {
     String? accessToken,
     String? refreshToken,
     DateTime? expiresAt,
-    List<String>? linkedProviders,
+    List<AuthAccount>? linkedAccounts,
+    SessionMetadata? metadata,
     DateTime? createdAt,
     DateTime? lastUsedAt,
   }) {
@@ -250,7 +275,8 @@ class AuthSession extends Equatable {
       accessToken: accessToken ?? this.accessToken,
       refreshToken: refreshToken ?? this.refreshToken,
       expiresAt: expiresAt ?? this.expiresAt,
-      linkedProviders: linkedProviders ?? this.linkedProviders,
+      linkedAccounts: linkedAccounts ?? this.linkedAccounts,
+      metadata: metadata ?? this.metadata,
       createdAt: createdAt ?? this.createdAt,
       lastUsedAt: lastUsedAt ?? this.lastUsedAt,
     );
@@ -271,7 +297,8 @@ class AuthSession extends Equatable {
         'accessToken': accessToken,
         'refreshToken': refreshToken,
         'expiresAt': expiresAt?.toIso8601String(),
-        'linkedProviders': linkedProviders,
+        'linkedAccounts': linkedAccounts.map((a) => a.toJson()).toList(),
+        'metadata': metadata?.toJson(),
         'createdAt': createdAt.toIso8601String(),
         'lastUsedAt': lastUsedAt.toIso8601String(),
       };
@@ -282,7 +309,19 @@ class AuthSession extends Equatable {
   /// - [expiresAt] is nullable; an absent or `null` value means no known expiry.
   /// - [createdAt] and [lastUsedAt] fall back to [DateTime.now] when absent,
   ///   which is safe for sessions migrated from older storage formats.
+  /// - Legacy sessions with `linkedProviders` as `List<String>` are migrated
+  ///   to empty [linkedAccounts] gracefully.
   factory AuthSession.fromJson(Map<String, dynamic> json) {
+    // Deserialise linkedAccounts — gracefully handle legacy List<String> format.
+    List<AuthAccount> linkedAccounts = const [];
+    final raw = json['linkedAccounts'];
+    if (raw is List) {
+      linkedAccounts = raw
+          .whereType<Map<String, dynamic>>()
+          .map(AuthAccount.fromJson)
+          .toList();
+    }
+
     return AuthSession(
       providerId: json['providerId'] as String,
       user: AuthUser.fromJson(json['user'] as Map<String, dynamic>),
@@ -291,10 +330,11 @@ class AuthSession extends Equatable {
       expiresAt: json['expiresAt'] != null
           ? DateTime.parse(json['expiresAt'] as String)
           : null,
-      linkedProviders: (json['linkedProviders'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
-          const [],
+      linkedAccounts: linkedAccounts,
+      metadata: json['metadata'] != null
+          ? SessionMetadata.fromJson(
+              json['metadata'] as Map<String, dynamic>)
+          : null,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),
@@ -315,12 +355,14 @@ class AuthSession extends Equatable {
         accessToken,
         refreshToken,
         expiresAt,
-        linkedProviders,
+        linkedAccounts,
+        metadata,
         createdAt,
         lastUsedAt,
       ];
 
   @override
-  String toString() => 'AuthSession(userId: ${user.id}, provider: $providerId, '
-      'expired: $isExpired, linkedProviders: $linkedProviders)';
+  String toString() =>
+      'AuthSession(userId: ${user.id}, provider: $providerId, '
+      'expired: $isExpired, linkedAccounts: ${linkedAccounts.length})';
 }

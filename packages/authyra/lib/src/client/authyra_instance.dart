@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:authyra/src/client/authyra_client.dart';
 import 'package:authyra/src/exceptions/auth_exceptions.dart';
+import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/session/account_manager.dart';
 import 'package:authyra/src/models/auth_session.dart';
@@ -264,7 +265,7 @@ class AuthyraInstance with AuthyraLogging {
   /// ```
   Future<AuthUser> signIn(
     String providerId, {
-    Map<String, dynamic>? params,
+    AuthSignInParams? params,
   }) =>
       _client.signIn(providerId, params: params);
 

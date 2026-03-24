@@ -1,6 +1,7 @@
+import 'package:authyra/src/interfaces/auth_provider.dart';
+import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/models/auth_user.dart';
-import 'package:authyra/src/interfaces/auth_provider.dart';
 
 /// Callback that validates credentials and returns the authenticated user.
 ///
@@ -10,14 +11,17 @@ import 'package:authyra/src/interfaces/auth_provider.dart';
 /// and [CredentialsProvider.withTokens] instead.
 ///
 /// ```dart
-/// Future<AuthUser?> myAuthorize(Map<String, dynamic>? creds) async {
-///   final res = await myApi.post('/auth/login', body: creds);
+/// Future<AuthUser?> myAuthorize(CredentialsSignInParams? creds) async {
+///   final res = await myApi.post('/auth/login', body: {
+///     'email': creds?.email,
+///     'password': creds?.password,
+///   });
 ///   if (res.statusCode != 200) return null;
 ///   return AuthUser(id: res.data['id'], email: res.data['email']);
 /// }
 /// ```
 typedef AuthorizeCallback = Future<AuthUser?> Function(
-  Map<String, dynamic>? credentials,
+  CredentialsSignInParams? credentials,
 );
 
 /// Extended callback that returns the full [AuthSignInResult] with tokens.
@@ -25,8 +29,11 @@ typedef AuthorizeCallback = Future<AuthUser?> Function(
 /// Use when your backend returns access/refresh tokens in the sign-in response.
 ///
 /// ```dart
-/// Future<AuthSignInResult?> myAuthorize(Map<String, dynamic>? creds) async {
-///   final res = await myApi.post('/auth/login', body: creds);
+/// Future<AuthSignInResult?> myAuthorize(CredentialsSignInParams? creds) async {
+///   final res = await myApi.post('/auth/login', body: {
+///     'email': creds?.email,
+///     'password': creds?.password,
+///   });
 ///   if (res.statusCode != 200) return null;
 ///   return AuthSignInResult(
 ///     user: AuthUser(id: res.data['id'], email: res.data['email']),
@@ -37,7 +44,7 @@ typedef AuthorizeCallback = Future<AuthUser?> Function(
 /// }
 /// ```
 typedef AuthorizeWithTokensCallback = Future<AuthSignInResult?> Function(
-  Map<String, dynamic>? credentials,
+  CredentialsSignInParams? credentials,
 );
 
 /// Authentication provider for email + password (or any custom credentials).
@@ -51,7 +58,10 @@ typedef AuthorizeWithTokensCallback = Future<AuthSignInResult?> Function(
 /// CredentialsProvider(
 ///   id: 'email',
 ///   authorize: (creds) async {
-///     final res = await myApi.post('/login', body: creds);
+///     final res = await myApi.post('/login', body: {
+///       'email': creds?.email,
+///       'password': creds?.password,
+///     });
 ///     if (res.statusCode != 200) return null;
 ///     return AuthUser(id: res.data['id'], email: res.data['email']);
 ///   },
@@ -64,7 +74,10 @@ typedef AuthorizeWithTokensCallback = Future<AuthSignInResult?> Function(
 /// CredentialsProvider.withTokens(
 ///   id: 'email',
 ///   authorize: (creds) async {
-///     final res = await myApi.post('/login', body: creds);
+///     final res = await myApi.post('/login', body: {
+///       'email': creds?.email,
+///       'password': creds?.password,
+///     });
 ///     if (res.statusCode != 200) return null;
 ///     return AuthSignInResult(
 ///       user: AuthUser(id: res.data['userId']),
@@ -76,8 +89,18 @@ typedef AuthorizeWithTokensCallback = Future<AuthSignInResult?> Function(
 /// )
 /// ```
 ///
+/// ## Sign in
+///
+/// ```dart
+/// await client.signIn('email', params: CredentialsSignInParams(
+///   email: 'alice@example.com',
+///   password: 's3cr3t',
+/// ));
+/// ```
+///
 /// See also:
 /// - [AuthProvider], the base interface.
+/// - [CredentialsSignInParams], the typed params for this provider.
 /// - [OAuth2Provider], for social / OIDC flows.
 class CredentialsProvider with AuthyraLogging implements AuthProvider {
   final String _id;
@@ -122,20 +145,22 @@ class CredentialsProvider with AuthyraLogging implements AuthProvider {
   bool get supportsSignOut => false;
 
   @override
-  Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
+  Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
     try {
       logInfo('Sign in via CredentialsProvider[$id]');
 
+      final credentials = params is CredentialsSignInParams ? params : null;
+
       final authorizeWithTokens = _authorizeWithTokens;
       if (authorizeWithTokens != null) {
-        final result = await authorizeWithTokens(params);
+        final result = await authorizeWithTokens(credentials);
         if (result == null) {
           logWarning('Authorization returned null for provider: $id');
         }
         return result;
       }
 
-      final user = await _authorize!(params);
+      final user = await _authorize!(credentials);
       if (user == null) {
         logWarning('Authorization returned null for provider: $id');
         return null;

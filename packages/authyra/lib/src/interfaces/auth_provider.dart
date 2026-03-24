@@ -1,4 +1,6 @@
+import 'package:authyra/src/models/auth_account.dart';
 import 'package:authyra/src/models/auth_user.dart';
+import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 
 /// The authentication strategy implemented by a provider.
 ///
@@ -27,18 +29,26 @@ enum AuthProviderType {
 
 /// The full result of a successful [AuthProvider.signIn] call.
 ///
-/// [AuthSignInResult] bundles the authenticated [user] with any tokens
-/// returned by the identity provider. Tokens are optional because some flows
-/// (e.g., server-side cookie sessions) do not surface them to the client.
+/// [AuthSignInResult] bundles the authenticated [user] with any tokens and
+/// account data returned by the identity provider. All fields except [user]
+/// are optional to support cookie-based flows where tokens are managed
+/// server-side.
 ///
-/// [AuthyraClient] uses this object to construct an [AuthSession], so
-/// providers should populate [accessToken], [refreshToken], and [expiresAt]
-/// whenever the tokens are available from the provider response.
+/// [AuthyraClient] uses this object to construct an [AuthSession] and to
+/// persist the [account] entry. Providers should populate [accessToken],
+/// [refreshToken], [expiresAt], and [account] whenever the data is available.
 ///
 /// ```dart
 /// // In an OAuth2 provider after the code/token exchange:
 /// return AuthSignInResult(
 ///   user: extractUser(userInfo),
+///   account: AuthAccount(
+///     id: 'google_${userInfo['sub']}',
+///     userId: extractUser(userInfo).id,
+///     providerId: 'google',
+///     providerAccountId: userInfo['sub'],
+///     providerData: {'hd': userInfo['hd']},
+///   ),
 ///   accessToken: tokens['access_token'],
 ///   refreshToken: tokens['refresh_token'],
 ///   expiresAt: DateTime.now().add(
@@ -49,6 +59,12 @@ enum AuthProviderType {
 class AuthSignInResult {
   /// The authenticated user's identity profile.
   final AuthUser user;
+
+  /// The provider-linked account entry for this sign-in.
+  ///
+  /// When `null`, [AuthyraClient] generates a minimal [AuthAccount] using the
+  /// provider ID and user ID as the `providerAccountId`.
+  final AuthAccount? account;
 
   /// Short-lived access token for API requests, if returned by the provider.
   final String? accessToken;
@@ -62,10 +78,11 @@ class AuthSignInResult {
 
   /// Creates an [AuthSignInResult].
   ///
-  /// Only [user] is required. Token fields are optional to support server-side
-  /// session flows where tokens are managed opaquely by the backend.
+  /// Only [user] is required. All other fields are optional to support
+  /// server-side session flows where tokens are managed opaquely by the backend.
   const AuthSignInResult({
     required this.user,
+    this.account,
     this.accessToken,
     this.refreshToken,
     this.expiresAt,
@@ -129,8 +146,8 @@ class AuthTokenResult {
 ///   have safe default no-op implementations.
 /// - Providers are **stateless** — they hold configuration, not session state.
 ///   Session state lives in [SessionManager].
-/// - [signIn] returns [AuthSignInResult] (not just [AuthUser]) so that tokens
-///   returned by the provider are preserved and stored in the session.
+/// - [signIn] accepts typed [AuthSignInParams] — cast to your expected subclass
+///   (e.g., [CredentialsSignInParams]) inside your override.
 ///
 /// ## Minimal example
 ///
@@ -146,8 +163,12 @@ class AuthTokenResult {
 ///   bool get supportsRefresh => true;
 ///
 ///   @override
-///   Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
-///     final response = await myApi.post('/auth/login', body: params);
+///   Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
+///     final creds = params as CredentialsSignInParams?;
+///     final response = await myApi.post('/auth/login', body: {
+///       'email': creds?.email,
+///       'password': creds?.password,
+///     });
 ///     if (response.statusCode != 200) return null;
 ///     return AuthSignInResult(
 ///       user: AuthUser(id: response.data['userId']),
@@ -172,7 +193,8 @@ class AuthTokenResult {
 ///
 /// See also:
 /// - [AuthyraClient], which registers and invokes providers.
-/// - [AuthSignInResult], the rich sign-in result that carries user + tokens.
+/// - [AuthSignInParams], the typed parameter hierarchy.
+/// - [AuthSignInResult], the rich sign-in result that carries user + account + tokens.
 /// - [AuthTokenResult], the token-only result for refresh operations.
 /// - [AuthSession], the session built from a successful [signIn].
 abstract class AuthProvider {
@@ -210,23 +232,24 @@ abstract class AuthProvider {
 
   /// Authenticates the user and returns the full result, or `null` on failure.
   ///
-  /// [params] carries provider-specific input:
+  /// [params] carries provider-specific input as a typed [AuthSignInParams]
+  /// subclass. Cast to the expected type inside your override:
   ///
-  /// | Strategy    | Expected keys                                    |
-  /// |-------------|--------------------------------------------------|
-  /// | credentials | `{'email': '...', 'password': '...'}`            |
-  /// | oauth2      | `{'code': '...', 'state': '...'}` (post-redirect)|
-  /// | magicLink   | `{'email': '...'}`                               |
-  /// | phone       | `{'phoneNumber': '...', 'otp': '...'}`           |
+  /// | Strategy    | Expected type               |
+  /// |-------------|------------------------------|
+  /// | credentials | [CredentialsSignInParams]    |
+  /// | oauth2      | [OAuth2SignInParams]          |
+  /// | magicLink   | [MagicLinkSignInParams]       |
+  /// | phone       | [PhoneSignInParams]           |
   ///
   /// Return `null` when authentication simply fails (e.g., wrong password).
-  /// Throw an [AuthyraException] subclass for infrastructure errors
+  /// Throw an [AuthException] subclass for infrastructure errors
   /// (network failure, CSRF mismatch, invalid provider config).
   ///
-  /// **Always populate token fields** when the provider returns them.
-  /// Leaving [AuthSignInResult.accessToken] as `null` means no token is stored
-  /// and silent refresh will not work.
-  Future<AuthSignInResult?> signIn({Map<String, dynamic>? params});
+  /// **Always populate [AuthSignInResult.account] and token fields** when the
+  /// provider returns them — they are stored in the session and enable
+  /// account-linking and silent refresh.
+  Future<AuthSignInResult?> signIn({AuthSignInParams? params});
 
   /// Revokes server-side credentials for [userId].
   ///

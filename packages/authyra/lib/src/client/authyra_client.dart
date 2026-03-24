@@ -5,14 +5,15 @@ import 'package:authyra/src/events/auth_events.dart';
 import 'package:authyra/src/events/auth_event_bus.dart';
 import 'package:authyra/src/exceptions/auth_exceptions.dart';
 import 'package:authyra/src/internal/logger.dart';
+import 'package:authyra/src/models/auth_account.dart';
 import 'package:authyra/src/session/account_manager.dart';
 import 'package:authyra/src/session/session_manager.dart';
-import 'package:authyra/src/internal/validators.dart';
 import 'package:authyra/src/models/auth_config.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_state.dart';
 import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/interfaces/auth_provider.dart';
+import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 import 'package:authyra/src/interfaces/auth_storage.dart';
 
 /// Stateless authentication orchestrator — the core of the Authyra framework.
@@ -32,7 +33,10 @@ import 'package:authyra/src/interfaces/auth_storage.dart';
 ///     CredentialsProvider(
 ///       id: 'email',
 ///       authorize: (creds) async {
-///         final res = await myApi.post('/login', body: creds);
+///         final res = await myApi.post('/login', body: {
+///           'email': creds?.email,
+///           'password': creds?.password,
+///         });
 ///         if (res.statusCode != 200) return null;
 ///         return AuthUser(id: res.data['userId'], email: res.data['email']);
 ///       },
@@ -48,10 +52,10 @@ import 'package:authyra/src/interfaces/auth_storage.dart';
 /// ## Sign in
 ///
 /// ```dart
-/// final user = await client.signIn('email', params: {
-///   'email': 'alice@example.com',
-///   'password': 's3cr3t',
-/// });
+/// final user = await client.signIn('email', params: CredentialsSignInParams(
+///   email: 'alice@example.com',
+///   password: 's3cr3t',
+/// ));
 /// ```
 ///
 /// ## Reactive state
@@ -59,6 +63,14 @@ import 'package:authyra/src/interfaces/auth_storage.dart';
 /// ```dart
 /// client.authStateStream.listen((state) {
 ///   if (state.isAuthenticated) navigateToDashboard();
+/// });
+/// ```
+///
+/// ## Events
+///
+/// ```dart
+/// client.events.on<SignInEvent>((event) {
+///   print('Signed in: ${event.user.email}');
 /// });
 /// ```
 ///
@@ -96,20 +108,11 @@ class AuthyraClient with AuthyraLogging {
   // Lazy-initialised multi-account facade.
   AccountManager? _accountManager;
 
-  // Custom callbacks (middleware)
-  // todo: allow user to add like
-  // callbacks: CompositeCallbacks([
-  //     SecurityCallbacks(),      // IP, device, country checks
-  //     BanCallbacks(),          // Check bans, suspensions
-  //     TenantCallbacks(),       // Multi-tenancy validation
-  //     RateLimitCallbacks(),    // Rate limiting
-  //   ]),
+  // Custom callbacks (middleware).
   AuthCallbacks? _callbacks;
 
-  // Get event bus
-  // usage: Authyra.instance.events.on<SignInEvent>((event) {});
-  // todo: add it to AuthyraInstance also
-  AuthEventBus get events => AuthEventBus.instance;
+  // Scoped event bus — one instance per client, no global singleton.
+  final AuthEventBus _eventBus = AuthEventBus();
 
   // Broadcast stream for AuthState changes.
   final _authStateController = StreamController<AuthState>.broadcast();
@@ -168,7 +171,9 @@ class AuthyraClient with AuthyraLogging {
       await _sessionManager.initialize();
       _initialized = true;
       final count = _sessionManager.accountCount;
-      logInfo(count > 0 ? 'AuthyraClient ready — $count account(s) restored' : 'AuthyraClient ready');
+      logInfo(count > 0
+          ? 'AuthyraClient ready — $count account(s) restored'
+          : 'AuthyraClient ready');
     } catch (e, stackTrace) {
       logError('Failed to initialize AuthyraClient', e, stackTrace);
       rethrow;
@@ -182,6 +187,7 @@ class AuthyraClient with AuthyraLogging {
   Future<void> dispose() async {
     await _sessionManager.dispose();
     await _authStateController.close();
+    _eventBus.dispose();
     logDebug('AuthyraClient disposed');
   }
 
@@ -198,7 +204,8 @@ class AuthyraClient with AuthyraLogging {
   /// Throws [ProviderAlreadyRegisteredException] if the id is already in use.
   void registerProvider(AuthProvider provider) {
     if (provider.id.isEmpty) {
-      throw InvalidProviderConfigException(provider.id, 'Provider id cannot be empty');
+      throw InvalidProviderConfigException(
+          provider.id, 'Provider id cannot be empty');
     }
     if (_providerMap.containsKey(provider.id)) {
       throw ProviderAlreadyRegisteredException(provider.id);
@@ -208,14 +215,28 @@ class AuthyraClient with AuthyraLogging {
   }
 
   // ---------------------------------------------------------------------------
+  // Events
+  // ---------------------------------------------------------------------------
+
+  /// Scoped event bus for this client instance.
+  ///
+  /// Subscribe to auth events without global state leakage:
+  ///
+  /// ```dart
+  /// client.events.on<SignInEvent>((e) => print('Signed in: ${e.user.id}'));
+  /// client.events.on<TokenRefreshEvent>((e) => print('Refreshed: ${e.success}'));
+  /// ```
+  AuthEventBus get events => _eventBus;
+
+  // ---------------------------------------------------------------------------
   // Authentication
   // ---------------------------------------------------------------------------
 
   /// Signs in using the provider identified by [providerId].
   ///
-  /// [params] is forwarded verbatim to [AuthProvider.signIn]. Expected keys
-  /// depend on the provider type — see [AuthProvider.signIn] for the full
-  /// table.
+  /// [params] is forwarded verbatim to [AuthProvider.signIn]. Pass the
+  /// appropriate [AuthSignInParams] subclass for the target provider:
+  /// [CredentialsSignInParams], [OAuth2SignInParams], etc.
   ///
   /// When the user already has an active session, the profile is updated and
   /// the account is activated — no duplicate session is created.
@@ -226,21 +247,20 @@ class AuthyraClient with AuthyraLogging {
   /// Throws [AuthenticationFailedException] if the provider rejects the sign-in.
   ///
   /// ```dart
-  /// final user = await client.signIn('email', params: {
-  ///   'email': 'alice@example.com',
-  ///   'password': 's3cr3t',
-  /// });
+  /// final user = await client.signIn('email', params: CredentialsSignInParams(
+  ///   email: 'alice@example.com',
+  ///   password: 's3cr3t',
+  /// ));
   /// ```
   Future<AuthUser> signIn(
     String providerId, {
-    Map<String, dynamic>? params,
+    AuthSignInParams? params,
   }) async {
     final startTime = DateTime.now();
     _assertInitialized();
     try {
       logInfo('Sign in started — provider: $providerId');
 
-      // 🔴 CALLBACK: Before sign in
       if (_callbacks != null) {
         final result = await _callbacks!.onBeforeSignIn(providerId, params);
         if (result.isDenied) {
@@ -252,10 +272,8 @@ class AuthyraClient with AuthyraLogging {
       }
 
       final provider = _findProvider(providerId);
-
-      AuthValidators.validateSignInParams(providerId, params);
-
       final result = await provider.signIn(params: params);
+
       if (result == null) {
         throw AuthenticationFailedException(
           'Provider "$providerId" returned null — credentials may be invalid',
@@ -264,18 +282,17 @@ class AuthyraClient with AuthyraLogging {
       }
 
       final user = result.user;
-      AuthValidators.validateUserData(user.toJson());
 
       // If the user already has a session, update it and switch to it.
       final existingSession = await _sessionManager.getSession(user.id);
       final isNewUser = existingSession == null;
 
-      // 🔴 CALLBACK: Before session create
       if (_callbacks != null) {
-        final result = await _callbacks!.onBeforeSessionCreate(user, providerId);
-        if (result.isDenied) {
+        final cbResult =
+            await _callbacks!.onBeforeSessionCreate(user, providerId);
+        if (cbResult.isDenied) {
           throw AuthenticationFailedException(
-            result.errorMessage ?? 'Session creation denied by callback',
+            cbResult.errorMessage ?? 'Session creation denied by callback',
             providerName: providerId,
           );
         }
@@ -285,9 +302,8 @@ class AuthyraClient with AuthyraLogging {
         logInfo('Existing session found for ${user.id} — refreshing');
         await _refreshExistingSession(user, result, providerId);
 
-        // 🟢 EVENT: Sign in successful
         final duration = DateTime.now().difference(startTime);
-        events.emit(SignInEvent(
+        _eventBus.emit(SignInEvent(
           user: user,
           providerName: providerId,
           isNewUser: false,
@@ -297,21 +313,32 @@ class AuthyraClient with AuthyraLogging {
         return user;
       }
 
-      // Create a new session from the sign-in result.
+      final account = result.account ??
+          AuthAccount(
+            id: '${providerId}_${user.id}',
+            userId: user.id,
+            providerId: providerId,
+            providerAccountId: user.id,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            tokenExpiresAt: result.expiresAt,
+          );
+
+      final now = DateTime.now();
       final session = AuthSession(
         providerId: providerId,
         user: user,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
-        expiresAt: result.expiresAt ?? DateTime.now().add(config.tokenLifetimeDuration),
-        createdAt: DateTime.now(),
-        lastUsedAt: DateTime.now(),
+        expiresAt: result.expiresAt ?? now.add(config.tokenLifetimeDuration),
+        linkedAccounts: [account],
+        createdAt: now,
+        lastUsedAt: now,
       );
 
       await _sessionManager.saveSession(session, setAsActive: true);
 
-      // 🟢 EVENT: Session created
-      events.emit(SessionCreatedEvent(
+      _eventBus.emit(SessionCreatedEvent(
         session: session,
         isNewUser: isNewUser,
       ));
@@ -319,9 +346,8 @@ class AuthyraClient with AuthyraLogging {
       logInfo('Sign in successful — user: ${user.id}');
       _emitAuthState(AuthState.authenticated(user));
 
-      // 🟢 EVENT: Sign in successful
       final duration = DateTime.now().difference(startTime);
-      events.emit(SignInEvent(
+      _eventBus.emit(SignInEvent(
         user: user,
         providerName: providerId,
         isNewUser: isNewUser,
@@ -333,8 +359,7 @@ class AuthyraClient with AuthyraLogging {
       logError('Sign in failed', e);
       _emitAuthState(AuthState.error(e.message));
 
-      // 🟢 EVENT: Sign in failed
-      events.emit(SignInFailedEvent(
+      _eventBus.emit(SignInFailedEvent(
         providerName: providerId,
         errorMessage: e.message,
         errorCode: e.code,
@@ -344,8 +369,7 @@ class AuthyraClient with AuthyraLogging {
       logError('Sign in failed unexpectedly', e, stackTrace);
       _emitAuthState(AuthState.error(e.toString()));
 
-      // 🟢 EVENT: Sign in failed
-      events.emit(SignInFailedEvent(
+      _eventBus.emit(SignInFailedEvent(
         providerName: providerId,
         errorMessage: e.toString(),
       ));
@@ -369,13 +393,12 @@ class AuthyraClient with AuthyraLogging {
     _assertInitialized();
     try {
       logInfo('Sign out started');
-      final session = await _sessionManager.getActiveSession();
+      final session = _sessionManager.activeSession;
       if (session == null) {
         logDebug('No active session — sign out is a no-op');
         return;
       }
 
-      // 🔴 CALLBACK: Before sign out
       if (_callbacks != null) {
         final result = await _callbacks!.onBeforeSignOut(session.user);
         if (result.isDenied) {
@@ -404,14 +427,16 @@ class AuthyraClient with AuthyraLogging {
       await _sessionManager.clearActiveSession();
       logInfo('Signed out — user: ${session.user.id}');
 
-      // 🟢 EVENT: Sign out successful
-      events.emit(SignOutEvent(
+      _eventBus.emit(SignOutEvent(
         user: session.user,
         sessionDuration: sessionDuration,
       ));
 
       final next = _sessionManager.activeSession;
-      _emitAuthState(next != null ? AuthState.authenticated(next.user) : AuthState.unauthenticated());
+      _emitAuthState(
+          next != null
+              ? AuthState.authenticated(next.user)
+              : AuthState.unauthenticated());
     } catch (e, stackTrace) {
       logError('Sign out failed', e, stackTrace);
       throw AuthyraErrorHandler.handleError(e, stackTrace);
@@ -421,9 +446,9 @@ class AuthyraClient with AuthyraLogging {
   /// Silently refreshes the active session's access token.
   ///
   /// Delegates to [AuthProvider.refreshToken] for the active session's
-  /// provider. On success the session is updated with new tokens. On failure
-  /// (expired or invalid refresh token) the session is removed and
-  /// [AuthState.unauthenticated] is emitted.
+  /// provider. On success the session is updated with new tokens and a
+  /// [TokenRefreshEvent] is emitted. On failure the session is removed and
+  /// [AuthState.unauthenticated] is emitted via a [SessionExpiredEvent].
   ///
   /// Returns `true` when the refresh succeeded, `false` when the provider
   /// does not support refresh or no refresh token is available.
@@ -432,7 +457,7 @@ class AuthyraClient with AuthyraLogging {
   Future<bool> refreshSession() async {
     _assertInitialized();
     try {
-      final session = await _sessionManager.getActiveSession();
+      final session = _sessionManager.activeSession;
       if (session == null) throw SessionNotFoundException();
 
       final provider = _findProvider(session.providerId);
@@ -452,8 +477,7 @@ class AuthyraClient with AuthyraLogging {
         logWarning(
           'Refresh returned null — forcing re-auth for user: ${session.user.id}',
         );
-        await _sessionManager.clearActiveSession();
-        _emitAuthState(AuthState.unauthenticated());
+        await _expireSession(session, errorMessage: 'Refresh token rejected by provider');
         return false;
       }
 
@@ -465,6 +489,7 @@ class AuthyraClient with AuthyraLogging {
 
       await _sessionManager.updateSession(session.user.id, refreshed);
       logInfo('Session refreshed — user: ${session.user.id}');
+      _eventBus.emit(TokenRefreshEvent(user: session.user, success: true));
       return true;
     } on AuthException {
       rethrow;
@@ -483,19 +508,45 @@ class AuthyraClient with AuthyraLogging {
 
   /// Returns the currently active [AuthSession], or `null`.
   ///
-  /// Throws [TokenExpiredException] when the session exists but has expired.
-  Future<AuthSession?> getSession() => _sessionManager.getActiveSession();
+  /// When [AuthConfig.autoRefresh] is `true` and the session is expiring soon
+  /// (within [AuthConfig.refreshThreshold]), the token is refreshed silently
+  /// before returning. If the refresh fails (provider error, no refresh token),
+  /// the session is cleared, [SessionExpiredEvent] is emitted, and `null` is
+  /// returned.
+  ///
+  /// When `autoRefresh` is `false` and the session is expired, `null` is
+  /// returned and callers should prompt re-authentication.
+  Future<AuthSession?> getSession() async {
+    final rawSession = _sessionManager.activeSession;
+    if (rawSession == null) return null;
+
+    if (config.autoRefresh &&
+        rawSession.shouldRefresh(threshold: config.refreshThreshold)) {
+      logInfo(
+          'Session expiring soon — auto-refreshing for user: ${rawSession.user.id}');
+      await _tryAutoRefresh(rawSession);
+      final refreshedSession = _sessionManager.activeSession;
+      if (refreshedSession == null || refreshedSession.isExpired) return null;
+      return refreshedSession;
+    }
+
+    if (rawSession.isExpired) {
+      logWarning(
+          'Session expired, autoRefresh disabled — user: ${rawSession.user.id}');
+      return null;
+    }
+
+    return rawSession;
+  }
 
   /// Returns the active access token, or `null`.
-  ///
-  /// Throws [TokenExpiredException] when the session is expired.
-  Future<String?> getAccessToken() => _sessionManager.getAccessToken();
+  Future<String?> getAccessToken() async => (await getSession())?.accessToken;
 
   /// Returns `true` when there is an active, non-expired session.
   Future<bool> isAuthenticated() async {
     try {
       final session = await getSession();
-      return session != null && !session.isExpired;
+      return session != null;
     } catch (_) {
       return false;
     }
@@ -550,6 +601,67 @@ class AuthyraClient with AuthyraLogging {
   // Private helpers
   // ---------------------------------------------------------------------------
 
+  /// Auto-refreshes [session] when the token is expiring or expired.
+  ///
+  /// On success: updates session in registry, emits [TokenRefreshEvent].
+  /// On failure: clears session, emits [TokenRefreshEvent] + [SessionExpiredEvent],
+  ///             transitions state to [AuthState.unauthenticated].
+  Future<void> _tryAutoRefresh(AuthSession session) async {
+    final provider = _providerMap[session.providerId];
+
+    if (provider == null ||
+        !provider.supportsRefresh ||
+        session.refreshToken == null) {
+      logWarning(
+          'Cannot auto-refresh (no refresh support) — user: ${session.user.id}');
+      await _expireSession(session,
+          errorMessage: 'Provider does not support refresh or no refresh token');
+      return;
+    }
+
+    try {
+      logInfo('Auto-refreshing session — user: ${session.user.id}');
+      final result = await provider.refreshToken(session.refreshToken!);
+
+      if (result == null) {
+        logWarning(
+            'Auto-refresh returned null — session expired for user: ${session.user.id}');
+        await _expireSession(session,
+            errorMessage: 'Refresh token rejected by provider');
+        return;
+      }
+
+      final refreshedSession = session.refreshed(
+        newAccessToken: result.accessToken,
+        newRefreshToken: result.refreshToken,
+        newExpiresAt: result.expiresAt,
+      );
+
+      await _sessionManager.updateSession(session.user.id, refreshedSession);
+      logInfo('Auto-refresh succeeded — user: ${session.user.id}');
+      _eventBus.emit(TokenRefreshEvent(user: session.user, success: true));
+    } catch (e, stackTrace) {
+      logError(
+          'Auto-refresh failed for user: ${session.user.id}', e, stackTrace);
+      await _expireSession(session, errorMessage: e.toString());
+    }
+  }
+
+  /// Clears [session], emits expiry events, and transitions to unauthenticated.
+  Future<void> _expireSession(AuthSession session, {String? errorMessage}) async {
+    await _sessionManager.clearActiveSession();
+    _eventBus.emit(TokenRefreshEvent(
+      user: session.user,
+      success: false,
+      errorMessage: errorMessage,
+    ));
+    _eventBus.emit(SessionExpiredEvent(
+      user: session.user,
+      expiredAt: session.expirationOrNow,
+    ));
+    _emitAuthState(AuthState.unauthenticated());
+  }
+
   /// Updates and activates an existing session after a repeated sign-in.
   Future<void> _refreshExistingSession(
     AuthUser user,
@@ -598,5 +710,3 @@ class AuthyraClient with AuthyraLogging {
     if (!_initialized) throw NotInitializedException();
   }
 }
-
-// Un système d'interception avant (callbacks) et de notification après (events) pour une architecture extensible.
