@@ -339,6 +339,7 @@ class AuthyraClient with AuthyraLogging {
         return user;
       }
 
+      final now = DateTime.now();
       final account = result.account ??
           AuthAccount(
             id: '${providerId}_${user.id}',
@@ -347,16 +348,12 @@ class AuthyraClient with AuthyraLogging {
             providerAccountId: user.id,
             accessToken: result.accessToken,
             refreshToken: result.refreshToken,
-            tokenExpiresAt: result.expiresAt,
+            tokenExpiresAt: result.expiresAt ?? now.add(config.tokenLifetimeDuration),
           );
 
-      final now = DateTime.now();
       final session = AuthSession(
-        providerId: providerId,
         user: user,
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        expiresAt: result.expiresAt ?? now.add(config.tokenLifetimeDuration),
+        activeAccountId: account.id,
         linkedAccounts: [account],
         createdAt: now,
         lastUsedAt: now,
@@ -618,12 +615,21 @@ class AuthyraClient with AuthyraLogging {
     final existing = await _sessionManager.getSession(user.id);
     if (existing == null) return;
 
-    final updated = existing.copyWith(
-      user: user,
-      accessToken: result.accessToken ?? existing.accessToken,
-      refreshToken: result.refreshToken ?? existing.refreshToken,
-      expiresAt: result.expiresAt ?? existing.expiresAt,
-    );
+    // Update the active account's tokens if the provider returned new ones.
+    AuthSession updated = existing.copyWith(user: user);
+    final activeAcc = existing.activeAccount;
+    if (activeAcc != null) {
+      final updatedAcc = activeAcc.copyWith(
+        accessToken: result.accessToken ?? activeAcc.accessToken,
+        refreshToken: result.refreshToken ?? activeAcc.refreshToken,
+        tokenExpiresAt: result.expiresAt ?? activeAcc.tokenExpiresAt,
+      );
+      updated = updated.copyWith(
+        linkedAccounts: existing.linkedAccounts
+            .map((a) => a.id == activeAcc.id ? updatedAcc : a)
+            .toList(),
+      );
+    }
 
     await _sessionManager.updateSession(user.id, updated);
     await _sessionManager.switchAccount(user.id);

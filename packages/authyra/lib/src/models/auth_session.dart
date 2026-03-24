@@ -3,81 +3,77 @@ import 'package:authyra/src/models/auth_account.dart';
 import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/models/session_metadata.dart';
 
-/// Represents an authenticated session containing tokens and user identity.
+/// An active session for an [AuthUser], modelled as a **pointer** to the
+/// current [AuthAccount].
 ///
-/// [AuthSession] is an **immutable value object** that stores all
-/// authentication data for a single account: the associated [AuthUser],
-/// access/refresh tokens, expiry metadata, linked [AuthAccount] entries,
-/// and optional [SessionMetadata].
+/// [AuthSession] is an **immutable value object** that records *which* account
+/// is active right now, together with session-scoped metadata and timestamps.
+/// Token data ([accessToken], [refreshToken], [expiresAt]) are **not stored
+/// directly** on the session; they are read from [activeAccount], which is the
+/// entry in [linkedAccounts] identified by [activeAccountId].
+///
+/// ## Why "Session as a Pointer"
+///
+/// Keeping tokens in [AuthAccount] rather than on the session gives a single
+/// source of truth: when [TokenRefresher] updates an account's tokens, every
+/// consumer that reads `session.accessToken` immediately sees the new value
+/// without needing to rebuild the session object. It also makes multi-provider
+/// account-switching trivial: changing [activeAccountId] switches which set of
+/// tokens is in use.
 ///
 /// ## Lifecycle
 ///
 /// ```
-/// sign-in → AuthSession created
-///         → [isExpiringSoon] triggers proactive refresh
-///         → [refreshed] returns new session with updated tokens
+/// sign-in → AuthSession created with activeAccountId pointing to primary account
+///         → [isExpiringSoon] triggers proactive refresh via TokenRefresher
+///         → [refreshed] updates tokens inside the active AuthAccount
 ///         → sign-out → session discarded from [SessionRegistry]
 /// ```
 ///
 /// ## Multi-provider support
 ///
-/// A single user can authenticate through multiple providers. The primary
-/// provider is stored in [providerId]; all linked provider accounts are
-/// listed in [linkedAccounts].
+/// One user can authenticate through multiple providers. Each is stored as an
+/// [AuthAccount] in [linkedAccounts]. [activeAccountId] identifies which one
+/// is currently used for token operations. Switching accounts means creating a
+/// new session via [copyWith] with a different [activeAccountId].
 ///
 /// ```dart
-/// final session = AuthSession(
-///   providerId: 'google',
-///   user: user,
-///   accessToken: 'ya29.xxx',
-///   expiresAt: DateTime.now().add(const Duration(hours: 1)),
-///   createdAt: DateTime.now(),
-///   lastUsedAt: DateTime.now(),
-/// );
+/// // Reading the active token — transparently reads from activeAccount.
+/// final token = session.accessToken;
 ///
+/// // Checking expiry.
 /// if (session.isExpiringSoon()) {
-///   final refreshed = await client.refresh(session);
+///   final refreshed = await client.refreshSession();
 /// }
+///
+/// // Switching to a linked provider.
+/// final withGithub = session.copyWith(
+///   activeAccountId: session.linkedAccounts
+///       .firstWhere((a) => a.providerId == 'github').id,
+/// );
 /// ```
 ///
 /// See also:
 /// - [AuthUser], the identity payload embedded in every session.
-/// - [AuthAccount], the provider-linked account entries.
+/// - [AuthAccount], the provider-linked account entries that hold tokens.
 /// - [SessionMetadata], the optional device/network context.
 /// - [SessionRegistry], the in-memory store for multi-account sessions.
 class AuthSession extends Equatable {
-  /// Primary authentication provider identifier.
-  ///
-  /// Lowercase slug (e.g., `'google'`, `'github'`, `'email'`). Matches the
-  /// `providerId` declared on the corresponding [AuthProvider].
-  final String providerId;
-
   /// User's identity profile for this session.
   final AuthUser user;
 
-  /// Short-lived access token used to authenticate API requests.
+  /// The [AuthAccount.id] of the currently active provider account.
   ///
-  /// May be `null` for session-cookie-based flows where the token is
-  /// managed server-side and not exposed to the client.
-  final String? accessToken;
-
-  /// Long-lived refresh token used to obtain new access tokens.
-  ///
-  /// When non-null and non-empty (see [canRefresh]), the session can be
-  /// silently renewed without requiring the user to re-authenticate.
-  final String? refreshToken;
-
-  /// UTC timestamp at which [accessToken] expires.
-  ///
-  /// `null` means the token has no known expiry (treat as non-expiring or
-  /// rely on server-side enforcement).
-  final DateTime? expiresAt;
+  /// Must match one entry in [linkedAccounts]. All token-related operations
+  /// ([accessToken], [refreshToken], [expiresAt], [refreshed]) read from and
+  /// write to the account identified by this ID.
+  final String activeAccountId;
 
   /// All provider-linked accounts for this user.
   ///
-  /// Each entry represents a provider that has been connected to this user.
-  /// The primary account (for [providerId]) is typically the first entry.
-  /// Additional entries are added via account-linking flows.
+  /// Each entry represents a provider connected to this user. The active
+  /// account ([activeAccountId]) is typically the first entry. Additional
+  /// entries are added via account-linking flows.
   ///
   /// Use [linkedProviderIds] for a quick set of connected provider IDs.
   final List<AuthAccount> linkedAccounts;
@@ -101,19 +97,61 @@ class AuthSession extends Equatable {
 
   /// Creates an [AuthSession].
   ///
-  /// [providerId], [user], [createdAt], and [lastUsedAt] are required.
-  /// Token fields are optional to support cookie-based flows.
+  /// [user], [activeAccountId], [createdAt], and [lastUsedAt] are required.
+  /// [activeAccountId] must reference an entry in [linkedAccounts] so that
+  /// token getters resolve correctly.
   const AuthSession({
-    required this.providerId,
     required this.user,
-    this.accessToken,
-    this.refreshToken,
-    this.expiresAt,
+    required this.activeAccountId,
     this.linkedAccounts = const [],
     this.metadata,
     required this.createdAt,
     required this.lastUsedAt,
   });
+
+  // ---------------------------------------------------------------------------
+  // Active account accessor
+  // ---------------------------------------------------------------------------
+
+  /// The currently active [AuthAccount], or `null` if [activeAccountId] is not
+  /// found in [linkedAccounts].
+  ///
+  /// All token getters ([accessToken], [refreshToken], [expiresAt],
+  /// [providerId]) delegate to this account.
+  AuthAccount? get activeAccount {
+    for (final account in linkedAccounts) {
+      if (account.id == activeAccountId) return account;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Computed token fields (delegate to active account)
+  // ---------------------------------------------------------------------------
+
+  /// Primary authentication provider identifier; derived from [activeAccount].
+  ///
+  /// Lowercase slug (e.g., `'google'`, `'github'`, `'email'`). Returns an
+  /// empty string when [activeAccount] is `null`.
+  String get providerId => activeAccount?.providerId ?? '';
+
+  /// Short-lived access token for the active account.
+  ///
+  /// `null` for session-cookie-based flows where the token is managed
+  /// server-side and not exposed to the client.
+  String? get accessToken => activeAccount?.accessToken;
+
+  /// Long-lived refresh token for the active account.
+  ///
+  /// When non-null and non-empty (see [canRefresh]), the session can be
+  /// silently renewed without requiring the user to re-authenticate.
+  String? get refreshToken => activeAccount?.refreshToken;
+
+  /// UTC timestamp at which [accessToken] expires.
+  ///
+  /// `null` means the token has no known expiry (treat as non-expiring or
+  /// rely on server-side enforcement).
+  DateTime? get expiresAt => activeAccount?.tokenExpiresAt;
 
   // ---------------------------------------------------------------------------
   // Expiry helpers
@@ -136,7 +174,7 @@ class AuthSession extends Equatable {
   ///
   /// ```dart
   /// if (session.isExpiringSoon(const Duration(minutes: 10))) {
-  ///   session = await client.refresh(session);
+  ///   session = await client.refreshSession();
   /// }
   /// ```
   ///
@@ -149,8 +187,8 @@ class AuthSession extends Equatable {
 
   /// Whether the session should be refreshed given a configurable [threshold].
   ///
-  /// Semantically equivalent to [isExpiringSoon] but accepts a named parameter,
-  /// making it ergonomic in configuration-driven auto-refresh logic.
+  /// Semantically equivalent to [isExpiringSoon] but accepts a named
+  /// parameter, making it ergonomic in configuration-driven auto-refresh logic.
   ///
   /// ```dart
   /// // Used internally by AuthyraClient's auto-refresh logic:
@@ -235,7 +273,12 @@ class AuthSession extends Equatable {
   /// recency ordering in [SessionRegistry].
   AuthSession markAsUsed() => copyWith(lastUsedAt: DateTime.now());
 
-  /// Returns a copy of this session with updated tokens after a refresh.
+  /// Returns a copy of this session with updated tokens applied to the active
+  /// account.
+  ///
+  /// Finds the account matching [activeAccountId] in [linkedAccounts] and
+  /// returns a new session where that account's `accessToken`, `refreshToken`,
+  /// and `tokenExpiresAt` are replaced. All other accounts are unchanged.
   ///
   /// [newRefreshToken] is optional; when omitted, the existing [refreshToken]
   /// is preserved (common in rotating-token flows where only the access token
@@ -252,10 +295,18 @@ class AuthSession extends Equatable {
     String? newRefreshToken,
     required DateTime newExpiresAt,
   }) {
+    final updatedAccounts = linkedAccounts.map((a) {
+      if (a.id == activeAccountId) {
+        return a.copyWith(
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken ?? a.refreshToken,
+          tokenExpiresAt: newExpiresAt,
+        );
+      }
+      return a;
+    }).toList();
     return copyWith(
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken ?? refreshToken,
-      expiresAt: newExpiresAt,
+      linkedAccounts: updatedAccounts,
       lastUsedAt: DateTime.now(),
     );
   }
@@ -264,22 +315,16 @@ class AuthSession extends Equatable {
   ///
   /// Fields not specified retain their current values.
   AuthSession copyWith({
-    String? providerId,
     AuthUser? user,
-    String? accessToken,
-    String? refreshToken,
-    DateTime? expiresAt,
+    String? activeAccountId,
     List<AuthAccount>? linkedAccounts,
     SessionMetadata? metadata,
     DateTime? createdAt,
     DateTime? lastUsedAt,
   }) {
     return AuthSession(
-      providerId: providerId ?? this.providerId,
       user: user ?? this.user,
-      accessToken: accessToken ?? this.accessToken,
-      refreshToken: refreshToken ?? this.refreshToken,
-      expiresAt: expiresAt ?? this.expiresAt,
+      activeAccountId: activeAccountId ?? this.activeAccountId,
       linkedAccounts: linkedAccounts ?? this.linkedAccounts,
       metadata: metadata ?? this.metadata,
       createdAt: createdAt ?? this.createdAt,
@@ -293,15 +338,13 @@ class AuthSession extends Equatable {
 
   /// Serialises this session to a JSON-compatible map.
   ///
-  /// Timestamps are encoded as ISO 8601 strings. [accessToken] and
-  /// [refreshToken] are included; ensure the output is stored securely
-  /// (encrypted storage, never plain localStorage in browser environments).
+  /// Timestamps are encoded as ISO 8601 strings. Token data is not stored
+  /// directly here; it lives inside [linkedAccounts]. Ensure the output is
+  /// stored securely (encrypted storage, never plain localStorage in browser
+  /// environments).
   Map<String, dynamic> toJson() => {
-        'providerId': providerId,
         'user': user.toJson(),
-        'accessToken': accessToken,
-        'refreshToken': refreshToken,
-        'expiresAt': expiresAt?.toIso8601String(),
+        'activeAccountId': activeAccountId,
         'linkedAccounts': linkedAccounts.map((a) => a.toJson()).toList(),
         'metadata': metadata?.toJson(),
         'createdAt': createdAt.toIso8601String(),
@@ -310,14 +353,15 @@ class AuthSession extends Equatable {
 
   /// Deserialises an [AuthSession] from a JSON map.
   ///
-  /// - [accessToken] and [refreshToken] are treated as nullable.
-  /// - [expiresAt] is nullable; an absent or `null` value means no known expiry.
+  /// - [activeAccountId] falls back to the first linked account's ID when
+  ///   absent; this handles sessions persisted before this field was introduced.
+  /// - Legacy sessions with `providerId` + top-level tokens are migrated
+  ///   gracefully: the tokens are read from [linkedAccounts] via the resolved
+  ///   [activeAccountId].
   /// - [createdAt] and [lastUsedAt] fall back to [DateTime.now] when absent,
   ///   which is safe for sessions migrated from older storage formats.
-  /// - Legacy sessions with `linkedProviders` as `List<String>` are migrated
-  ///   to empty [linkedAccounts] gracefully.
   factory AuthSession.fromJson(Map<String, dynamic> json) {
-    // Deserialise linkedAccounts — gracefully handle legacy List<String> format.
+    // Deserialise linkedAccounts.
     List<AuthAccount> linkedAccounts = const [];
     final raw = json['linkedAccounts'];
     if (raw is List) {
@@ -327,14 +371,22 @@ class AuthSession extends Equatable {
           .toList();
     }
 
+    // Resolve activeAccountId — gracefully handle pre-migration sessions.
+    String activeAccountId = json['activeAccountId'] as String? ?? '';
+    if (activeAccountId.isEmpty && linkedAccounts.isNotEmpty) {
+      activeAccountId = linkedAccounts.first.id;
+    }
+    if (activeAccountId.isEmpty) {
+      // Last resort: reconstruct from legacy providerId + userId fields.
+      final legacyProviderId = json['providerId'] as String? ?? '';
+      final userId =
+          (json['user'] as Map<String, dynamic>?)?['id'] as String? ?? '';
+      activeAccountId = '${legacyProviderId}_$userId';
+    }
+
     return AuthSession(
-      providerId: json['providerId'] as String,
       user: AuthUser.fromJson(json['user'] as Map<String, dynamic>),
-      accessToken: json['accessToken'] as String?,
-      refreshToken: json['refreshToken'] as String?,
-      expiresAt: json['expiresAt'] != null
-          ? DateTime.parse(json['expiresAt'] as String)
-          : null,
+      activeAccountId: activeAccountId,
       linkedAccounts: linkedAccounts,
       metadata: json['metadata'] != null
           ? SessionMetadata.fromJson(
@@ -355,11 +407,8 @@ class AuthSession extends Equatable {
 
   @override
   List<Object?> get props => [
-        providerId,
         user,
-        accessToken,
-        refreshToken,
-        expiresAt,
+        activeAccountId,
         linkedAccounts,
         metadata,
         createdAt,
