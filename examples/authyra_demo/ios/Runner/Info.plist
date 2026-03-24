@@ -45,5 +45,25 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	 <!-- OAuth2 URL Schemes -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <!-- Format Google -->
+                <string>com.googleusercontent.apps.YOUR_GOOGLE_CLIENT_ID</string>
+            </array>
+        </dict>
+    </array>
+    
+    <!-- Pour iOS 9+ (ouvrir navigateur) -->
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>https</string>
+        <string>http</string>
+    </array>
 </dict>
 </plist>
