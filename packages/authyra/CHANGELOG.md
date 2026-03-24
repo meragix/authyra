@@ -6,6 +6,7 @@ All notable changes to the `authyra` package are documented here.
 
 ### Added
 
+- `AutthyraClientBuilder`: fluent builder for configuring and instantiating `AuthyraClient` with custom providers, storage, config, and event bus.
 - `AuthAccount` model: provider-linked account entry with tokens and `providerData`. Full serialisation and `Equatable`.
 - `SessionMetadata` model: optional device/network context (`ipAddress`, `userAgent`, `deviceId`, `country`) attached to a session.
 - Typed `AuthSignInParams` hierarchy: `CredentialsSignInParams`, `OAuth2SignInParams`, `MagicLinkSignInParams`, `PhoneSignInParams`. Replaces `Map<String, dynamic>` for provider params.
