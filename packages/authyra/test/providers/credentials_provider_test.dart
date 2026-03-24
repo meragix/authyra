@@ -1,3 +1,4 @@
+import 'package:authyra/src/models/auth_sign_in_result.dart';
 import 'package:test/test.dart';
 import 'package:authyra/src/providers/credentials/credentials_provider.dart';
 import 'package:authyra/src/interfaces/auth_provider.dart';

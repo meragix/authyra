@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:authyra/src/models/auth_sign_in_result.dart';
+import 'package:authyra/src/models/auth_token_result.dart';
 import 'package:test/test.dart';
 import 'package:authyra/src/client/authyra_client.dart';
 import 'package:authyra/src/interfaces/auth_provider.dart';
