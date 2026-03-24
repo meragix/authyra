@@ -1,4 +1,4 @@
-/// Base exception class for all Authyra errors
+/// Base exception class for all Authyra errors.
 class AuthException implements Exception {
   final String message;
   final String? code;
@@ -20,7 +20,7 @@ class AuthException implements Exception {
     return buffer.toString();
   }
 
-  /// Convert to JSON for logging or debugging
+  /// Serialises this exception to a JSON-compatible map for logging or debugging.
   Map<String, dynamic> toJson() => {
         'type': runtimeType.toString(),
         'message': message,
@@ -29,11 +29,11 @@ class AuthException implements Exception {
       };
 }
 
-// ==========================================
-// Configuration & Initialization Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Configuration & Initialisation
+// ---------------------------------------------------------------------------
 
-/// Thrown when Authyra is used before initialization
+/// Thrown when [AuthyraClient] is used before [initialize] is called.
 class NotInitializedException extends AuthException {
   NotInitializedException()
       : super(
@@ -42,28 +42,28 @@ class NotInitializedException extends AuthException {
         );
 }
 
-/// Thrown when configuration is invalid
+/// Thrown when configuration is invalid (e.g., missing storage in builder).
 class InvalidConfigurationException extends AuthException {
   InvalidConfigurationException(super.message) : super(code: 'INVALID_CONFIG');
 }
 
-// ==========================================
-// Provider Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
 
-/// Thrown when a requested provider is not registered
+/// Thrown when a requested provider is not registered with [AuthyraClient].
 class ProviderNotFoundException extends AuthException {
   final String providerName;
 
   ProviderNotFoundException(this.providerName)
       : super(
           'Provider "$providerName" is not registered. '
-          'Use Authyra.instance.initialize(client: AuthyraClient(providers: [...])) to register it.',
+          'Add it via AuthyraClient(providers: [...]).',
           code: 'PROVIDER_NOT_FOUND',
         );
 }
 
-/// Thrown when a provider is already registered
+/// Thrown when two providers share the same [AuthProvider.id].
 class ProviderAlreadyRegisteredException extends AuthException {
   final String providerName;
 
@@ -74,7 +74,7 @@ class ProviderAlreadyRegisteredException extends AuthException {
         );
 }
 
-/// Thrown when provider configuration is invalid
+/// Thrown when a provider's configuration is invalid.
 class InvalidProviderConfigException extends AuthException {
   final String providerName;
 
@@ -85,11 +85,11 @@ class InvalidProviderConfigException extends AuthException {
         );
 }
 
-// ==========================================
-// Authentication Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Authentication
+// ---------------------------------------------------------------------------
 
-/// Thrown when authentication is cancelled by the user
+/// Thrown when the user cancels an authentication flow.
 class AuthenticationCancelledException extends AuthException {
   final String? providerName;
 
@@ -101,7 +101,7 @@ class AuthenticationCancelledException extends AuthException {
         );
 }
 
-/// Thrown when authentication fails
+/// Thrown when an authentication attempt fails.
 class AuthenticationFailedException extends AuthException {
   final String? providerName;
 
@@ -116,7 +116,7 @@ class AuthenticationFailedException extends AuthException {
         );
 }
 
-/// Thrown when credentials are invalid
+/// Thrown when credentials (email/password) are invalid.
 class InvalidCredentialsException extends AuthException {
   InvalidCredentialsException([String? details])
       : super(
@@ -125,7 +125,7 @@ class InvalidCredentialsException extends AuthException {
         );
 }
 
-/// Thrown when required authentication parameters are missing
+/// Thrown when required authentication parameters are missing.
 class MissingAuthParametersException extends AuthException {
   final List<String> missingParams;
 
@@ -136,11 +136,11 @@ class MissingAuthParametersException extends AuthException {
         );
 }
 
-// ==========================================
-// Session & Token Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Session & Token
+// ---------------------------------------------------------------------------
 
-/// Thrown when access token has expired
+/// Thrown when an access token has expired.
 class TokenExpiredException extends AuthException {
   TokenExpiredException([String? details])
       : super(
@@ -149,7 +149,7 @@ class TokenExpiredException extends AuthException {
         );
 }
 
-/// Thrown when token refresh fails
+/// Thrown when a token refresh attempt fails.
 class TokenRefreshFailedException extends AuthException {
   TokenRefreshFailedException([String? reason, dynamic originalError])
       : super(
@@ -159,7 +159,7 @@ class TokenRefreshFailedException extends AuthException {
         );
 }
 
-/// Thrown when token is invalid or malformed
+/// Thrown when a token is invalid or malformed.
 class InvalidTokenException extends AuthException {
   InvalidTokenException([String? details])
       : super(
@@ -168,7 +168,7 @@ class InvalidTokenException extends AuthException {
         );
 }
 
-/// Thrown when session is not found
+/// Thrown when no active session is found.
 class SessionNotFoundException extends AuthException {
   SessionNotFoundException()
       : super(
@@ -177,7 +177,7 @@ class SessionNotFoundException extends AuthException {
         );
 }
 
-/// Thrown when session operations fail
+/// Thrown when a session mutation (save, update, clear) fails.
 class SessionOperationException extends AuthException {
   SessionOperationException(String operation, [dynamic originalError])
       : super(
@@ -187,11 +187,11 @@ class SessionOperationException extends AuthException {
         );
 }
 
-// ==========================================
-// Storage Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
 
-/// Thrown when storage operations fail
+/// Thrown when a storage read/write operation fails.
 class StorageException extends AuthException {
   final String operation;
 
@@ -203,32 +203,11 @@ class StorageException extends AuthException {
         );
 }
 
-/// Thrown when storage is not initialized
-class StorageNotInitializedException extends AuthException {
-  StorageNotInitializedException()
-      : super(
-          'Storage has not been initialized. Call initialize() first.',
-          code: 'STORAGE_NOT_INITIALIZED',
-        );
-}
+// ---------------------------------------------------------------------------
+// Network
+// ---------------------------------------------------------------------------
 
-/// Thrown when stored data is corrupted
-class CorruptedDataException extends AuthException {
-  final String key;
-
-  CorruptedDataException(this.key, [dynamic originalError])
-      : super(
-          'Stored data is corrupted for key: $key',
-          code: 'CORRUPTED_DATA',
-          originalError: originalError,
-        );
-}
-
-// ==========================================
-// Network Errors
-// ==========================================
-
-/// Thrown when network operations fail
+/// Thrown when a network request fails.
 class NetworkException extends AuthException {
   final int? statusCode;
   final String? url;
@@ -247,18 +226,21 @@ class NetworkException extends AuthException {
         );
 }
 
-/// Thrown when request times out
-class TimeoutException extends AuthException {
+/// Thrown when a request times out.
+///
+/// Named [AuthTimeoutException] to avoid shadowing `dart:async`'s
+/// `TimeoutException`.
+class AuthTimeoutException extends AuthException {
   final Duration timeout;
 
-  TimeoutException(this.timeout)
+  AuthTimeoutException(this.timeout)
       : super(
           'Request timed out after ${timeout.inSeconds} seconds',
           code: 'TIMEOUT',
         );
 }
 
-/// Thrown when there's no internet connection
+/// Thrown when no internet connection is available.
 class NoInternetException extends AuthException {
   NoInternetException()
       : super(
@@ -267,11 +249,11 @@ class NoInternetException extends AuthException {
         );
 }
 
-// ==========================================
-// Validation Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
 
-/// Thrown when input validation fails
+/// Thrown when input validation fails.
 class ValidationException extends AuthException {
   final String field;
 
@@ -282,22 +264,22 @@ class ValidationException extends AuthException {
         );
 }
 
-/// Thrown when email format is invalid
+/// Thrown when an email address has an invalid format.
 class InvalidEmailException extends ValidationException {
   InvalidEmailException(String email)
       : super('email', '"$email" is not a valid email address');
 }
 
-/// Thrown when password doesn't meet requirements
+/// Thrown when a password does not meet the required policy.
 class InvalidPasswordException extends ValidationException {
   InvalidPasswordException(String reason) : super('password', reason);
 }
 
-// ==========================================
-// Account & Multi-Account Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Multi-Account
+// ---------------------------------------------------------------------------
 
-/// Thrown when account is not found
+/// Thrown when an account is not found in the registry.
 class AccountNotFoundException extends AuthException {
   final String accountId;
 
@@ -308,7 +290,7 @@ class AccountNotFoundException extends AuthException {
         );
 }
 
-/// Thrown when trying to add a duplicate account
+/// Thrown when trying to add an account that already exists.
 class DuplicateAccountException extends AuthException {
   final String accountId;
 
@@ -319,31 +301,18 @@ class DuplicateAccountException extends AuthException {
         );
 }
 
-// ==========================================
-// Backend Linker Errors
-// ==========================================
+// ---------------------------------------------------------------------------
+// Platform
+// ---------------------------------------------------------------------------
 
-/// Thrown when backend sync operations fail
-class BackendSyncException extends AuthException {
-  final String operation;
-
-  BackendSyncException(this.operation, [dynamic originalError])
-      : super(
-          'Backend sync failed for operation: $operation',
-          code: 'BACKEND_SYNC_FAILED',
-          originalError: originalError,
-        );
-}
-
-// ==========================================
-// Platform Errors
-// ==========================================
-
-/// Thrown when platform-specific operation fails
-class PlatformException extends AuthException {
+/// Thrown when a platform-specific operation fails.
+///
+/// Named [AuthPlatformException] to avoid shadowing Flutter's
+/// `PlatformException` from `package:flutter/services.dart`.
+class AuthPlatformException extends AuthException {
   final String platform;
 
-  PlatformException(this.platform, String message, [dynamic originalError])
+  AuthPlatformException(this.platform, String message, [dynamic originalError])
       : super(
           'Platform error on $platform: $message',
           code: 'PLATFORM_ERROR',
@@ -351,7 +320,7 @@ class PlatformException extends AuthException {
         );
 }
 
-/// Thrown when feature is not supported on current platform
+/// Thrown when a feature is not supported on the current platform.
 class UnsupportedPlatformException extends AuthException {
   final String feature;
   final String platform;
@@ -363,45 +332,35 @@ class UnsupportedPlatformException extends AuthException {
         );
 }
 
-// ==========================================
-// Error Handler Utility
-// ==========================================
+// ---------------------------------------------------------------------------
+// Error handler utility
+// ---------------------------------------------------------------------------
 
-/// Utility class to handle and categorize errors
+/// Converts arbitrary errors into typed [AuthException] subclasses.
 class AuthyraErrorHandler {
-  /// Convert any error to AuthException
+  /// Wraps [error] in the most specific [AuthException] subclass available.
+  ///
+  /// If [error] is already an [AuthException] it is returned as-is.
+  /// Platform-specific errors (SocketException, PlatformException) are
+  /// detected by type name when a direct `is` check is not possible across
+  /// package boundaries.
   static AuthException handleError(dynamic error, [StackTrace? stackTrace]) {
-    if (error is AuthException) {
-      return error;
-    }
+    if (error is AuthException) return error;
 
-    // Network errors from Dio
-    if (error.toString().contains('SocketException')) {
+    final desc = error.toString();
+
+    if (desc.contains('SocketException')) {
       return NoInternetException();
     }
 
-    if (error.toString().contains('TimeoutException')) {
-      return TimeoutException(const Duration(seconds: 30));
+    if (desc.contains('TimeoutException')) {
+      return AuthTimeoutException(const Duration(seconds: 30));
     }
 
-    if (error.toString().contains('DioException') ||
-        error.toString().contains('DioError')) {
-      return NetworkException(
-        'Request failed',
-        originalError: error,
-      );
+    if (desc.contains('PlatformException')) {
+      return AuthPlatformException('unknown', desc, error);
     }
 
-    // Platform exceptions
-    if (error.toString().contains('PlatformException')) {
-      return PlatformException(
-        'unknown',
-        error.toString(),
-        error,
-      );
-    }
-
-    // Generic error
     return AuthException(
       'An unexpected error occurred',
       code: 'UNKNOWN_ERROR',
@@ -410,105 +369,41 @@ class AuthyraErrorHandler {
     );
   }
 
-  /// Check if error is recoverable
+  /// Returns `true` when [exception] represents a transient condition that
+  /// the caller may retry without user interaction.
   static bool isRecoverable(AuthException exception) {
     return exception is NetworkException ||
-        exception is TimeoutException ||
+        exception is AuthTimeoutException ||
         exception is NoInternetException ||
         exception is TokenExpiredException;
   }
 
-  /// Get user-friendly error message
+  /// Returns a user-facing message suitable for display in UI.
   static String getUserMessage(AuthException exception) {
     if (exception is NoInternetException) {
       return 'No internet connection. Please check your network and try again.';
     }
-
-    if (exception is TimeoutException) {
+    if (exception is AuthTimeoutException) {
       return 'Request timed out. Please try again.';
     }
-
     if (exception is AuthenticationCancelledException) {
       return 'Sign in was cancelled.';
     }
-
     if (exception is InvalidCredentialsException) {
       return 'Invalid email or password. Please try again.';
     }
-
     if (exception is TokenExpiredException) {
       return 'Your session has expired. Please sign in again.';
     }
-
     if (exception is ProviderNotFoundException) {
       return 'This sign-in method is not available. Please try another method.';
     }
-
     if (exception is InvalidEmailException) {
       return 'Please enter a valid email address.';
     }
-
     if (exception is InvalidPasswordException) {
       return exception.message;
     }
-
-    // Generic fallback
     return 'Something went wrong. Please try again.';
-  }
-}
-
-// ==========================================
-// Error Recovery Strategies
-// ==========================================
-
-/// Defines how to recover from specific errors
-class ErrorRecoveryStrategy {
-  final AuthException exception;
-
-  ErrorRecoveryStrategy(this.exception);
-
-  /// Get suggested action for the user
-  String getSuggestedAction() {
-    if (exception is NoInternetException) {
-      return 'Check your internet connection and try again';
-    }
-
-    if (exception is TokenExpiredException) {
-      return 'Sign in again to continue';
-    }
-
-    if (exception is InvalidCredentialsException) {
-      return 'Check your email and password';
-    }
-
-    if (exception is ProviderNotFoundException) {
-      return 'Contact support or use a different sign-in method';
-    }
-
-    if (exception is AuthenticationCancelledException) {
-      return 'Try signing in again when ready';
-    }
-
-    if (exception is TimeoutException) {
-      return 'Check your connection and retry';
-    }
-
-    return 'Try again or contact support if the problem persists';
-  }
-
-  /// Check if operation should be retried automatically
-  bool shouldRetry() {
-    return exception is NetworkException ||
-        exception is TimeoutException ||
-        exception is NoInternetException;
-  }
-
-  /// Get retry delay (exponential backoff)
-  Duration getRetryDelay(int attemptNumber) {
-    if (!shouldRetry()) return Duration.zero;
-
-    // Exponential backoff: 1s, 2s, 4s, 8s...
-    final seconds = (1 << (attemptNumber - 1)).clamp(1, 30);
-    return Duration(seconds: seconds);
   }
 }

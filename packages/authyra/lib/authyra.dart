@@ -16,6 +16,7 @@ export 'src/models/auth_session.dart';
 export 'src/models/auth_state.dart';
 export 'src/models/auth_config.dart';
 export 'src/models/auth_token_result.dart';
+export 'src/models/auth_sign_in_result.dart';
 export 'src/models/auth_account.dart';
 export 'src/models/session_metadata.dart';
 

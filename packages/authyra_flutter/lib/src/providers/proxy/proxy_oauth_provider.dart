@@ -143,7 +143,7 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
   /// Throws [AuthenticationCancelledException] if [ProxyOAuthConfig.timeout]
   /// elapses before the deep link arrives.
   @override
-  Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
+  Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
     if (_pendingCallback != null && !_pendingCallback!.isCompleted) {
       logWarning('Cancelling previous pending OAuth callback for $id');
       _pendingCallback!.completeError(
@@ -156,7 +156,7 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
       logInfo('Starting backend OAuth flow for $id');
 
       // Step 1: Ask the backend to initiate the OAuth flow.
-      final authUrl = await _initiateFlow(params);
+      final authUrl = await _initiateFlow(null);
       logDebug('Authorization URL received for $id');
 
       // Step 2: Open the URL in an external browser.

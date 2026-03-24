@@ -43,7 +43,6 @@ class AuthyraGuard extends StatefulWidget {
 class _AuthyraGuardState extends State<AuthyraGuard> {
   bool _isLoading = true;
   bool _isAuthenticated = false;
-  String? _errorMessage;
 
   @override
   void initState() {
@@ -81,7 +80,6 @@ class _AuthyraGuardState extends State<AuthyraGuard> {
         setState(() {
           _isAuthenticated = widget.config.allowOnError;
           _isLoading = false;
-          _errorMessage = e.toString();
         });
       }
     }

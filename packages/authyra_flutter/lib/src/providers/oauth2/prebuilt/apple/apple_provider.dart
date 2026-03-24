@@ -158,7 +158,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
   /// Throws [AuthenticationCancelledException] when the user dismisses the
   /// browser or [AppleOAuthConfig.timeout] elapses.
   @override
-  Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
+  Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
     try {
       logInfo('Starting Sign in with Apple flow');
 

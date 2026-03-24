@@ -523,12 +523,6 @@ void main() {
           returnAccessToken: 'tok1',
           returnExpiresAt: DateTime.now().add(const Duration(hours: 1)),
         );
-        final p2 = _FakeProvider(
-          returnUser: AuthUser(id: 'u2', email: 'u2@test.com'),
-          returnAccessToken: 'tok2',
-          returnExpiresAt: DateTime.now().add(const Duration(hours: 1)),
-        );
-
         // Two providers with different ids
         final client = AuthyraClient(
           providers: [],

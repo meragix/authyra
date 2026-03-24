@@ -161,7 +161,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   /// Throws [AuthenticationCancelledException] when the user dismisses the
   /// browser or [OAuth2Config.timeout] elapses.
   @override
-  Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
+  Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
     try {
       logInfo('Starting OAuth2 flow for ${config.providerName}');
 

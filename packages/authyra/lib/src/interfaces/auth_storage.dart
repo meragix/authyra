@@ -70,8 +70,8 @@ abstract class AuthStorage {
   /// - Database connection / schema migration.
   /// - Verification that the underlying store is accessible.
   ///
-  /// Throws a [StorageNotInitializedException]-compatible error if the backend
-  /// cannot be brought to a ready state.
+  /// Throws a [StorageException] if the backend cannot be brought to a ready
+  /// state.
   Future<void> initialize();
 
   /// Reads and returns the UTF-8 string value associated with [key].

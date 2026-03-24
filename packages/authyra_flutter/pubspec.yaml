@@ -3,6 +3,7 @@ description: >-
   The Flutter integration for Authyra. Provides secure storage, 
   reactive UI components, and official OAuth/Credentials provider
 version: 0.1.0
+publish_to: none
 homepage: https://meragix.github.io/authyra
 repository: https://github.com/meragix/authyra
 issue_tracker: https://github.com/meragix/authyra/issues
