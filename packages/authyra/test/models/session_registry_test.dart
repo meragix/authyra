@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:authyra/src/session/session_registry.dart';
+import 'package:authyra/src/models/auth_account.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_user.dart';
 
@@ -7,15 +8,47 @@ AuthUser _user(String id) => AuthUser(id: id, email: '$id@test.com');
 
 AuthSession _session(String userId, {bool expired = false}) {
   final now = DateTime.now();
-  return AuthSession(
+  final account = AuthAccount(
+    id: 'credentials_$userId',
+    userId: userId,
     providerId: 'credentials',
-    user: _user(userId),
+    providerAccountId: userId,
     accessToken: 'token_$userId',
-    expiresAt: expired
+    tokenExpiresAt: expired
         ? now.subtract(const Duration(hours: 1))
         : now.add(const Duration(hours: 1)),
+  );
+  return AuthSession(
+    user: _user(userId),
+    activeAccountId: account.id,
+    linkedAccounts: [account],
     createdAt: now,
     lastUsedAt: now,
+  );
+}
+
+AuthSession _sessionAt(
+  String userId,
+  DateTime lastUsedAt, {
+  bool expired = false,
+}) {
+  final now = DateTime.now();
+  final account = AuthAccount(
+    id: 'credentials_$userId',
+    userId: userId,
+    providerId: 'credentials',
+    providerAccountId: userId,
+    accessToken: 'tok_$userId',
+    tokenExpiresAt: expired
+        ? now.subtract(const Duration(hours: 1))
+        : now.add(const Duration(hours: 1)),
+  );
+  return AuthSession(
+    user: _user(userId),
+    activeAccountId: account.id,
+    linkedAccounts: [account],
+    createdAt: now,
+    lastUsedAt: lastUsedAt,
   );
 }
 
@@ -87,27 +120,13 @@ void main() {
 
       test('removing active session auto-elects next most recent', () {
         final now = DateTime.now();
-        final alice = AuthSession(
-          providerId: 'credentials',
-          user: _user('alice'),
-          accessToken: 'tok_alice',
-          expiresAt: now.add(const Duration(hours: 1)),
-          createdAt: now,
-          lastUsedAt: now.subtract(const Duration(minutes: 5)),
-        );
-        final bob = AuthSession(
-          providerId: 'credentials',
-          user: _user('bob'),
-          accessToken: 'tok_bob',
-          expiresAt: now.add(const Duration(hours: 1)),
-          createdAt: now,
-          lastUsedAt: now,
-        );
+        final alice = _sessionAt('alice', now.subtract(const Duration(minutes: 5)));
+        final bob = _sessionAt('bob', now);
 
         final r = const SessionRegistry()
             .addSession(alice)
             .addSession(bob);
-        // bob is active (most recently added)
+        // bob is active (most recently used)
         final r2 = r.removeSession('bob');
         expect(r2.activeUserId, 'alice');
         expect(r2.accountCount, 1);
@@ -144,7 +163,6 @@ void main() {
       test('unknown userId leaves registry unchanged', () {
         final r = const SessionRegistry().addSession(_session('alice'));
         final r2 = r.switchTo('nobody');
-        // switchTo returns `this` when userId not found
         expect(r2.activeUserId, 'alice');
         expect(r2.accountCount, 1);
       });
@@ -153,7 +171,10 @@ void main() {
     group('updateSession', () {
       test('replaces the session for userId', () {
         final original = _session('alice');
-        final updated = original.copyWith(accessToken: 'new_token');
+        final updated = original.refreshed(
+          newAccessToken: 'new_token',
+          newExpiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
 
         final r = const SessionRegistry()
             .addSession(original)
@@ -184,14 +205,8 @@ void main() {
 
       test('removing active expired session auto-elects valid one', () {
         final now = DateTime.now();
-        final expiredBob = AuthSession(
-          providerId: 'credentials',
-          user: _user('bob'),
-          accessToken: 'tok_bob',
-          expiresAt: now.subtract(const Duration(hours: 1)),
-          createdAt: now,
-          lastUsedAt: now,
-        );
+        final expiredBob = _sessionAt('bob', now, expired: true);
+
         final r = const SessionRegistry()
             .addSession(_session('alice'), setAsActive: false)
             .addSession(expiredBob); // bob is active
@@ -217,22 +232,8 @@ void main() {
     group('allSessions / allUsers', () {
       test('sorted by lastUsedAt descending', () {
         final now = DateTime.now();
-        final alice = AuthSession(
-          providerId: 'credentials',
-          user: _user('alice'),
-          accessToken: 'tok_alice',
-          expiresAt: now.add(const Duration(hours: 1)),
-          createdAt: now,
-          lastUsedAt: now.subtract(const Duration(minutes: 10)),
-        );
-        final bob = AuthSession(
-          providerId: 'credentials',
-          user: _user('bob'),
-          accessToken: 'tok_bob',
-          expiresAt: now.add(const Duration(hours: 1)),
-          createdAt: now,
-          lastUsedAt: now,
-        );
+        final alice = _sessionAt('alice', now.subtract(const Duration(minutes: 10)));
+        final bob = _sessionAt('bob', now);
 
         final r = const SessionRegistry()
             .addSession(alice, setAsActive: false)
@@ -290,3 +291,4 @@ void main() {
     });
   });
 }
+

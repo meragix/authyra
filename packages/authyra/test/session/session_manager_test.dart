@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:authyra/src/session/session_manager.dart';
+import 'package:authyra/src/models/auth_account.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/storage/memory_storage.dart';
@@ -9,14 +10,21 @@ AuthUser _user(String id) => AuthUser(id: id, email: '$id@test.com');
 
 AuthSession _session(String userId, {bool expired = false}) {
   final now = DateTime.now();
-  return AuthSession(
+  final account = AuthAccount(
+    id: 'credentials_$userId',
+    userId: userId,
     providerId: 'credentials',
-    user: _user(userId),
+    providerAccountId: userId,
     accessToken: 'token_$userId',
     refreshToken: 'refresh_$userId',
-    expiresAt: expired
+    tokenExpiresAt: expired
         ? now.subtract(const Duration(hours: 1))
         : now.add(const Duration(hours: 1)),
+  );
+  return AuthSession(
+    user: _user(userId),
+    activeAccountId: account.id,
+    linkedAccounts: [account],
     createdAt: now,
     lastUsedAt: now,
   );
@@ -57,8 +65,6 @@ void main() {
 
       test('prunes expired sessions at startup', () async {
         await manager.saveSession(_session('alice'));
-        // Manually write an expired session directly to storage to simulate
-        // an already-persisted but expired session
         await manager.saveSession(_session('bob', expired: true), setAsActive: false);
         await manager.dispose();
 
@@ -87,7 +93,10 @@ void main() {
 
       test('replacing same userId updates the session', () async {
         await manager.saveSession(_session('alice'));
-        final updated = _session('alice').copyWith(accessToken: 'new_token');
+        final updated = _session('alice').refreshed(
+          newAccessToken: 'new_token',
+          newExpiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
         await manager.saveSession(updated);
         expect(manager.accountCount, 1);
         expect(manager.activeSession?.accessToken, 'new_token');
@@ -144,7 +153,10 @@ void main() {
     group('updateSession', () {
       test('updates an existing session', () async {
         await manager.saveSession(_session('alice'));
-        final updated = _session('alice').copyWith(accessToken: 'updated_token');
+        final updated = _session('alice').refreshed(
+          newAccessToken: 'updated_token',
+          newExpiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
         await manager.updateSession('alice', updated);
         expect(manager.activeSession?.accessToken, 'updated_token');
       });
@@ -153,7 +165,10 @@ void main() {
         await manager.saveSession(_session('alice'));
         AuthSession? notified;
         manager.addListener((s) => notified = s);
-        final updated = _session('alice').copyWith(accessToken: 'refreshed');
+        final updated = _session('alice').refreshed(
+          newAccessToken: 'refreshed',
+          newExpiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
         await manager.updateSession('alice', updated);
         expect(notified?.accessToken, 'refreshed');
       });
