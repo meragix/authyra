@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:authyra/src/callbacks/auth_callbacks.dart';
+import 'package:authyra/src/models/auth_sign_in_result.dart';
 import 'package:authyra/src/plugins/auth_plugin.dart';
 import 'package:authyra/src/events/auth_events.dart';
 import 'package:authyra/src/events/auth_event_bus.dart';
