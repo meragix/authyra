@@ -13,13 +13,13 @@ import 'package:authyra/src/models/auth_user.dart';
 ///
 /// [AuthyraInstance] adds:
 ///
-/// - **Global access** via [instance] — no need to pass the client down the
+/// - **Global access** via [instance]: no need to pass the client down the
 ///   widget tree.
-/// - **Synchronous state** — [currentUser], [currentState], and
+/// - **Synchronous state**: [currentUser], [currentState], and
 ///   [isAuthenticated] reflect the latest state without awaiting a `Future`.
-/// - **Reactive streams** — [authStateChanges] and [sessionStream] for
+/// - **Reactive streams**: [authStateChanges] and [sessionStream] for
 ///   Riverpod, BLoC, `StreamBuilder`, or any reactive framework.
-/// - **Multi-account API** — [accounts] surfaces the full [AccountManager].
+/// - **Multi-account API**: [accounts] surfaces the full [AccountManager].
 ///
 /// ## Initialization (once, at app startup)
 ///
@@ -45,10 +45,10 @@ import 'package:authyra/src/models/auth_user.dart';
 ///
 /// ```dart
 /// // Sign in
-/// await Authyra.instance.signIn('email', params: {
-///   'email': 'alice@example.com',
-///   'password': 's3cr3t',
-/// });
+/// await Authyra.instance.signIn('email', params: CredentialsSignInParams(
+///   email: 'alice@example.com',
+///   password: 's3cr3t',
+/// ));
 ///
 /// // Synchronous state check
 /// if (Authyra.instance.isAuthenticated) {
@@ -123,7 +123,7 @@ class AuthyraInstance with AuthyraLogging {
   /// - Subscribes to [AuthyraClient.authStateStream] to keep [currentState]
   ///   in sync with all subsequent auth events.
   ///
-  /// Calling [initialize] a second time before [dispose] is a **no-op** —
+  /// Calling [initialize] a second time before [dispose] is a **no-op**;
   /// the existing instance is returned unchanged.
   ///
   /// Throws [StorageException] or other [AuthyraException] subclasses when
@@ -192,7 +192,7 @@ class AuthyraInstance with AuthyraLogging {
 
   /// The currently active [AuthUser], or `null` if not signed in.
   ///
-  /// Updated synchronously on every [authStateChanges] emission — safe to
+  /// Updated synchronously on every [authStateChanges] emission; safe to
   /// read in build methods without awaiting.
   AuthUser? get currentUser => _currentState.user;
 
@@ -254,14 +254,16 @@ class AuthyraInstance with AuthyraLogging {
 
   /// Signs in using the provider identified by [providerId].
   ///
-  /// Delegates to [AuthyraClient.signIn] — see its documentation for the
+  /// Delegates to [AuthyraClient.signIn]; see its documentation for the
   /// full contract, param table, and throwable exceptions.
   ///
   /// ```dart
-  /// final user = await Authyra.instance.signIn('email', params: {
-  ///   'email': 'alice@example.com',
-  ///   'password': 's3cr3t',
-  /// });
+  /// final user = await Authyra.instance.signIn('email',
+  ///   params: CredentialsSignInParams(
+  ///     email: 'alice@example.com',
+  ///     password: 's3cr3t',
+  ///   ),
+  /// );
   /// ```
   Future<AuthUser> signIn(
     String providerId, {

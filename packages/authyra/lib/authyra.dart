@@ -31,7 +31,7 @@ export 'src/interfaces/auth_sign_in_params.dart';
 // ---------------------------------------------------------------------------
 export 'src/client/authyra_client.dart';
 export 'src/client/authyra_instance.dart';
-export 'src/client/client_builder.dart';
+export 'src/client/authyra_client_builder.dart';
 
 // ---------------------------------------------------------------------------
 // Session — public API only (SessionManager internals are never exported)

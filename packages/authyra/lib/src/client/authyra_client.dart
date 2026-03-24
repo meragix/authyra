@@ -16,7 +16,7 @@ import 'package:authyra/src/interfaces/auth_provider.dart';
 import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 import 'package:authyra/src/interfaces/auth_storage.dart';
 
-/// Stateless authentication orchestrator — the core of the Authyra framework.
+/// Stateless authentication orchestrator: the core of the Authyra framework.
 ///
 /// [AuthyraClient] manages provider registration, session lifecycle, and token
 /// operations. It has **no global state** and runs on any Dart platform:
@@ -239,7 +239,7 @@ class AuthyraClient with AuthyraLogging {
   /// [CredentialsSignInParams], [OAuth2SignInParams], etc.
   ///
   /// When the user already has an active session, the profile is updated and
-  /// the account is activated — no duplicate session is created.
+  /// the account is activated; no duplicate session is created.
   ///
   /// Returns the authenticated [AuthUser] on success.
   ///
@@ -565,7 +565,7 @@ class AuthyraClient with AuthyraLogging {
   /// Broadcast stream of [AuthState] changes.
   ///
   /// Because [AuthState] extends [Equatable], identical consecutive states are
-  /// deduplicated — no spurious rebuilds.
+  /// deduplicated; no spurious rebuilds.
   ///
   /// ```dart
   /// client.authStateStream.listen((state) {
@@ -582,7 +582,7 @@ class AuthyraClient with AuthyraLogging {
   // Multi-account
   // ---------------------------------------------------------------------------
 
-  /// Multi-account management API — lazily initialised on first access.
+  /// Multi-account management API; lazily initialised on first access.
   ///
   /// ```dart
   /// final users = await client.accounts.getAll();
