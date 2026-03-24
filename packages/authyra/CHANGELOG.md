@@ -6,9 +6,25 @@ All notable changes to the `authyra` package are documented here.
 
 ### Added
 
+- `AuthAccount` model: provider-linked account entry with tokens and `providerData`. Full serialisation and `Equatable`.
+- `SessionMetadata` model: optional device/network context (`ipAddress`, `userAgent`, `deviceId`, `country`) attached to a session.
+- Typed `AuthSignInParams` hierarchy: `CredentialsSignInParams`, `OAuth2SignInParams`, `MagicLinkSignInParams`, `PhoneSignInParams`. Replaces `Map<String, dynamic>` for provider params.
+- `AuthyraClient.events`: per-instance `AuthEventBus` with typed `on<T>()`/`off<T>()` listeners and a raw broadcast `stream`.
+- Auto-refresh in `getSession()`: transparently refreshes the token when expiring soon (`autoRefresh: true`). Emits `SessionExpiredEvent` and returns `null` on failure.
+- Test suites for `SessionRegistry`, `InMemoryStorage`, `CredentialsProvider`, `SessionManager`, and `AuthyraClient` (107+ tests).
+
 ### Changed
 
+- `AuthProvider.signIn` and all callbacks now accept `AuthSignInParams?` instead of `Map<String, dynamic>?`.
+- `AuthSession.linkedProviders: List<String>` replaced by `linkedAccounts: List<AuthAccount>`. Added `linkedProviderIds` getter and updated `hasLinkedProvider()`. `fromJson` migrates legacy format gracefully.
+- `AuthSession` gains `metadata: SessionMetadata?`; `copyWith`/`toJson`/`fromJson` updated.
+- `AuthEventBus` is no longer a singleton — each `AuthyraClient` owns its own instance.
+- `AuthyraClient.signIn` auto-generates an `AuthAccount` when the provider doesn't supply one.
+
 ### Fixed
+
+- `AuthEventBus.on<T>()`: switched to `List<Function>` with dynamic dispatch to fix Dart contravariance cast error.
+- `getSession()` reads `activeSession` directly (bypassing expiry guard) before handing off to auto-refresh logic.
 
 ## [0.1.0] - 2026-02-23
 
