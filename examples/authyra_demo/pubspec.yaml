@@ -1,0 +1,27 @@
+name: authyra_demo
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  authyra_flutter:
+    path: ../../packages/authyra_flutter
+  app_links: ^3.5.0  # Recommandé
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+# The following section is specific to Flutter packages.
+flutter:
+  uses-material-design: true
+
