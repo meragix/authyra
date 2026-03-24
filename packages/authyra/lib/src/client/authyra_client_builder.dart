@@ -4,6 +4,7 @@ import 'package:authyra/src/exceptions/auth_exceptions.dart';
 import 'package:authyra/src/interfaces/auth_provider.dart';
 import 'package:authyra/src/interfaces/auth_storage.dart';
 import 'package:authyra/src/models/auth_config.dart';
+import 'package:authyra/src/plugins/auth_plugin.dart';
 
 /// Fluent builder for [AuthyraClient].
 ///
@@ -51,6 +52,7 @@ import 'package:authyra/src/models/auth_config.dart';
 /// - [AuthCallbacks], for middleware hooks (sign-in guards, audit logging).
 class AuthyraClientBuilder {
   final List<AuthProvider> _providers = [];
+  final List<AuthyraPlugin> _plugins = [];
   AuthStorage? _storage;
   AuthConfig _config = const AuthConfig();
   AuthCallbacks? _callbacks;
@@ -103,6 +105,23 @@ class AuthyraClientBuilder {
     return this;
   }
 
+  /// Appends [plugin] to the plugin list.
+  ///
+  /// Plugins are installed in the order they are added. Each plugin's
+  /// [AuthyraPlugin.install] is called once during [build].
+  ///
+  /// Returns `this` for chaining.
+  ///
+  /// ```dart
+  /// builder
+  ///   .addPlugin(AuditLogPlugin(myLogger))
+  ///   .addPlugin(RateLimitPlugin(maxAttempts: 5));
+  /// ```
+  AuthyraClientBuilder addPlugin(AuthyraPlugin plugin) {
+    _plugins.add(plugin);
+    return this;
+  }
+
   /// Attaches an [AuthCallbacks] middleware instance to the client.
   ///
   /// Optional. When provided, callback methods are invoked before sign-in,
@@ -149,6 +168,7 @@ class AuthyraClientBuilder {
       storage: _storage!,
       config: _config,
       callbacks: _callbacks,
+      plugins: _plugins,
     );
   }
 }

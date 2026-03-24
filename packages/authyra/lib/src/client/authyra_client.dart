@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:authyra/src/callbacks/auth_callbacks.dart';
+import 'package:authyra/src/plugins/auth_plugin.dart';
 import 'package:authyra/src/events/auth_events.dart';
 import 'package:authyra/src/events/auth_event_bus.dart';
 import 'package:authyra/src/exceptions/auth_exceptions.dart';
@@ -99,6 +100,11 @@ class AuthyraClient with AuthyraLogging {
   /// Configuration controlling token lifetime and auto-refresh behaviour.
   final AuthConfig config;
 
+  /// Plugins installed on this client.
+  ///
+  /// Each plugin's [AuthyraPlugin.install] is called once during construction.
+  final List<AuthyraPlugin> plugins;
+
   // Internal provider registry (id → provider).
   final Map<String, AuthProvider> _providerMap = {};
 
@@ -131,7 +137,8 @@ class AuthyraClient with AuthyraLogging {
     required this.storage,
     AuthCallbacks? callbacks,
     this.config = const AuthConfig(),
-  }) {
+    List<AuthyraPlugin>? plugins,
+  })  : plugins = List.unmodifiable(plugins ?? const []) {
     for (final provider in providers) {
       if (_providerMap.containsKey(provider.id)) {
         throw ProviderAlreadyRegisteredException(provider.id);
@@ -157,7 +164,7 @@ class AuthyraClient with AuthyraLogging {
         _eventBus.emit(TokenRefreshEvent(user: session.user, success: true));
         _emitAuthState(AuthState.authenticated(session.user));
       },
-      onFailure: (session, error) {
+      onFailure: (session, error) async {
         _eventBus.emit(TokenRefreshEvent(
           user: session.user,
           success: false,
@@ -168,12 +175,18 @@ class AuthyraClient with AuthyraLogging {
           expiredAt: session.expirationOrNow,
         ));
         _emitAuthState(AuthState.unauthenticated());
+        await _notifyPluginsSessionExpired(session);
       },
     );
 
     if (callbacks != null) {
       _callbacks = callbacks;
       logInfo('Custom callbacks registered');
+    }
+
+    for (final plugin in this.plugins) {
+      plugin.install(this);
+      logDebug('Plugin installed: ${plugin.name}');
     }
   }
 
@@ -297,6 +310,8 @@ class AuthyraClient with AuthyraLogging {
         }
       }
 
+      await _notifyPluginsBeforeSignIn(providerId, params);
+
       final provider = _findProvider(providerId);
       final result = await provider.signIn(params: params);
 
@@ -327,6 +342,11 @@ class AuthyraClient with AuthyraLogging {
       if (existingSession != null) {
         logInfo('Existing session found for ${user.id} — refreshing');
         await _refreshExistingSession(user, result, providerId);
+
+        final activatedSession = _sessionManager.activeSession;
+        if (activatedSession != null) {
+          await _notifyPluginsAfterSignIn(activatedSession);
+        }
 
         final duration = DateTime.now().difference(startTime);
         _eventBus.emit(SignInEvent(
@@ -360,6 +380,7 @@ class AuthyraClient with AuthyraLogging {
       );
 
       await _sessionManager.saveSession(session, setAsActive: true);
+      await _notifyPluginsAfterSignIn(session);
 
       _eventBus.emit(SessionCreatedEvent(
         session: session,
@@ -661,5 +682,42 @@ class AuthyraClient with AuthyraLogging {
 
   void _assertInitialized() {
     if (!_initialized) throw NotInitializedException();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Plugin notification helpers
+  // ---------------------------------------------------------------------------
+
+  Future<void> _notifyPluginsBeforeSignIn(
+    String providerId,
+    AuthSignInParams? params,
+  ) async {
+    for (final plugin in plugins) {
+      try {
+        await plugin.onBeforeSignIn(providerId, params);
+      } catch (e, st) {
+        logError('Plugin "${plugin.name}" threw in onBeforeSignIn', e, st);
+      }
+    }
+  }
+
+  Future<void> _notifyPluginsAfterSignIn(AuthSession session) async {
+    for (final plugin in plugins) {
+      try {
+        await plugin.onAfterSignIn(session);
+      } catch (e, st) {
+        logError('Plugin "${plugin.name}" threw in onAfterSignIn', e, st);
+      }
+    }
+  }
+
+  Future<void> _notifyPluginsSessionExpired(AuthSession session) async {
+    for (final plugin in plugins) {
+      try {
+        await plugin.onSessionExpired(session);
+      } catch (e, st) {
+        logError('Plugin "${plugin.name}" threw in onSessionExpired', e, st);
+      }
+    }
   }
 }
