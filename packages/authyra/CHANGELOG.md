@@ -6,6 +6,9 @@ All notable changes to the `authyra` package are documented here.
 
 ### Added
 
+- `TokenRefresher`: background token-refresh scheduler with configurable check interval, expiry threshold, and linear retry policy. Owned by `SessionManager`; wired up by `AuthyraClient` at construction time.
+- `SessionManager.refreshActiveSession()`: on-demand refresh delegating to `TokenRefresher` with the same retry policy.
+- `SessionManager.setRefreshCallbacks(onSuccess, onFailure)`: hook for `AuthyraClient` to emit `TokenRefreshEvent` / `SessionExpiredEvent` on refresh outcome.
 - `AutthyraClientBuilder`: fluent builder for configuring and instantiating `AuthyraClient` with custom providers, storage, config, and event bus.
 - `AuthAccount` model: provider-linked account entry with tokens and `providerData`. Full serialisation and `Equatable`.
 - `SessionMetadata` model: optional device/network context (`ipAddress`, `userAgent`, `deviceId`, `country`) attached to a session.
@@ -16,6 +19,7 @@ All notable changes to the `authyra` package are documented here.
 
 ### Changed
 
+- `AuthSession` is now a **pointer** to the active `AuthAccount`: token fields (`accessToken`, `refreshToken`, `expiresAt`, `providerId`) are computed getters delegating to `activeAccount`. The new required field `activeAccountId` identifies the active entry in `linkedAccounts`. Storage format migrates gracefully from the legacy flat structure.
 - `AuthProvider.signIn` and all callbacks now accept `AuthSignInParams?` instead of `Map<String, dynamic>?`.
 - `AuthSession.linkedProviders: List<String>` replaced by `linkedAccounts: List<AuthAccount>`. Added `linkedProviderIds` getter and updated `hasLinkedProvider()`. `fromJson` migrates legacy format gracefully.
 - `AuthSession` gains `metadata: SessionMetadata?`; `copyWith`/`toJson`/`fromJson` updated.
