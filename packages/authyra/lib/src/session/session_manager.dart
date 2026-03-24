@@ -20,11 +20,11 @@ typedef SessionChangeCallback = void Function(AuthSession? session);
 /// [SessionManager] is the **single source of truth** for all authenticated
 /// sessions. It orchestrates three layers:
 ///
-/// 1. **In-memory registry** — fast synchronous access via [activeSession],
+/// 1. **In-memory registry**: fast synchronous access via [activeSession],
 ///    [allUsers], etc.
-/// 2. **Persistent storage** — serialises the full [SessionRegistry] to
+/// 2. **Persistent storage**: serialises the full [SessionRegistry] to
 ///    [AuthStorage] on every mutation.
-/// 3. **Reactive notifications** — broadcasts session changes via
+/// 3. **Reactive notifications**: broadcasts session changes via
 ///    [sessionStream] and registered [SessionChangeCallback]s.
 ///
 /// ## Concurrency
@@ -472,7 +472,7 @@ class SessionManager with AuthyraLogging {
   /// Exposes the current in-memory [SessionRegistry].
   ///
   /// Intended for debugging, testing, or advanced integrations. Avoid using
-  /// this in production feature code — prefer the typed accessor methods.
+  /// this in production feature code; prefer the typed accessor methods.
   SessionRegistry getRegistry() => _registry;
 
   // ---------------------------------------------------------------------------
@@ -541,7 +541,7 @@ class SessionManager with AuthyraLogging {
 ///
 /// Ensures that only one [synchronized] block executes at a time, preventing
 /// read-modify-write races in async Dart code. Safe for use with Dart's
-/// single-threaded event loop — does NOT use `dart:isolate` primitives.
+/// single-threaded event loop; does NOT use `dart:isolate` primitives.
 class _AsyncMutex {
   final _queue = <Completer<void>>[];
   bool _locked = false;
@@ -551,7 +551,7 @@ class _AsyncMutex {
   /// If the lock is held by another operation, this call suspends until the
   /// lock becomes available. Operations are granted the lock in FIFO order.
   ///
-  /// The lock is always released — even if [operation] throws — preventing
+  /// The lock is always released; even if [operation] throws; preventing
   /// deadlocks.
   Future<T> synchronized<T>(Future<T> Function() operation) async {
     while (_locked) {

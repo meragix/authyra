@@ -11,7 +11,7 @@ import 'package:authyra/src/models/auth_user.dart';
 /// It coordinates account switching, sign-out, and session maintenance while
 /// propagating [AuthState] changes to the reactive layer via [onStateChange].
 ///
-/// Access it through `AuthyraInstance.accounts` — do not construct it
+/// Access it through `AuthyraInstance.accounts`; do not construct it
 /// directly in application code.
 ///
 /// ## Example
@@ -293,7 +293,7 @@ class AccountManager with AuthyraLogging {
   /// call this manually on app foreground events or periodic background tasks
   /// to reclaim storage and keep the registry clean.
   ///
-  /// Does not throw — errors are logged and swallowed, returning `0`.
+  /// Does not throw; errors are logged and swallowed, returning `0`.
   ///
   /// ```dart
   /// final removed = await Authyra.instance.accounts.cleanExpired();

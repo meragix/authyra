@@ -8,7 +8,7 @@ typedef EventListener<T extends AuthEvent> = void Function(T event);
 
 /// Scoped event bus for a single [AuthyraClient] instance.
 ///
-/// [AuthEventBus] is **not a singleton** — each [AuthyraClient] owns its own
+/// [AuthEventBus] is **not a singleton**; each [AuthyraClient] owns its own
 /// instance, which is injected into the session layer. This guarantees full
 /// isolation between multiple clients in the same process (multi-tenant apps,
 /// test suites, etc.).
@@ -47,7 +47,7 @@ class AuthEventBus with AuthyraLogging {
   /// Subscribes [listener] to events of type [T].
   ///
   /// The listener is called synchronously during [emit]. Any exception thrown
-  /// inside a listener is caught and logged — it will not propagate to the
+  /// inside a listener is caught and logged; it will not propagate to the
   /// emitter.
   ///
   /// ```dart

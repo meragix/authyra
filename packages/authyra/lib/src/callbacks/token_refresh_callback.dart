@@ -1,23 +1,32 @@
 import 'package:authyra/src/models/auth_session.dart';
 
-/// Callback function type for refreshing access tokens
+/// Signature for a custom token refresh function.
 ///
-/// Implement this to provide your custom token refresh logic.
-/// The function should return an updated [AuthSession] with new tokens.
+/// Receives the current [AuthSession] and must return an updated session
+/// with fresh tokens. Used as an escape hatch for custom refresh logic that
+/// does not fit the standard [AuthProvider.refreshToken] contract.
 ///
-/// Example:
+/// Return a new session built from [AuthSession.refreshed] to preserve all
+/// other session fields and update only the token data:
+///
 /// ```dart
-/// Future<AuthSession> refreshToken(AuthSession account) async {
+/// Future<AuthSession> myRefresh(AuthSession session) async {
 ///   final response = await http.post(
-///     Uri.parse('https://api.example.com/refresh'),
-///     body: {'refresh_token': account.refreshToken},
+///     Uri.parse('https://api.example.com/auth/refresh'),
+///     body: {'refresh_token': session.refreshToken},
 ///   );
-///   final data = jsonDecode(response.body);
-///   return account.copyWith(
-///     accessToken: data['access_token'],
-///     expiresAt: DateTime.now().add(Duration(seconds: data['expires_in'])).millisecondsSinceEpoch,
+///   final data = jsonDecode(response.body) as Map<String, dynamic>;
+///   return session.refreshed(
+///     newAccessToken: data['access_token'] as String,
+///     newExpiresAt: DateTime.now().add(
+///       Duration(seconds: data['expires_in'] as int),
+///     ),
 ///   );
 /// }
 /// ```
+///
+/// See also:
+/// - [AuthSession.refreshed], the preferred way to derive an updated session.
+/// - [AuthProvider.refreshToken], the standard token-renewal contract.
 typedef TokenRefreshCallback = Future<AuthSession> Function(
     AuthSession session);

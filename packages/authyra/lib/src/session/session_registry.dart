@@ -290,7 +290,7 @@ class SessionRegistry extends Equatable {
   /// Serialises the registry to a JSON-compatible map.
   ///
   /// Suitable for persisting the full multi-account state. Ensure that the
-  /// storage backend is encrypted — this map contains raw access tokens.
+  /// storage backend is encrypted; this map contains raw access tokens.
   Map<String, dynamic> toJson() => {
         'sessions': sessions.map(
           (key, value) => MapEntry(key, value.toJson()),
