@@ -79,7 +79,7 @@ class OAuth2CallbackHandler {
   static void registerProvider(String scheme, OAuth2Provider provider) {
     _providers[scheme] = provider;
     AuthyraLogger.debug(
-        'OAuth2CallbackHandler: registered provider "${provider.id}" for scheme "$scheme"');
+        '[OAuth2CallbackHandler] registered provider "${provider.id}" for scheme "$scheme"');
   }
 
   /// Unregisters the provider associated with [scheme].
@@ -89,7 +89,7 @@ class OAuth2CallbackHandler {
     final removed = _providers.remove(scheme);
     if (removed != null) {
       AuthyraLogger.debug(
-          'OAuth2CallbackHandler: unregistered provider "${removed.id}" for scheme "$scheme"');
+          '[OAuth2CallbackHandler] unregistered provider "${removed.id}" for scheme "$scheme"');
     }
   }
 
@@ -110,14 +110,14 @@ class OAuth2CallbackHandler {
   /// ```
   static void handleCallback(Uri uri) {
     AuthyraLogger.debug(
-        'OAuth2CallbackHandler: incoming callback — ${uri.toString()}');
+        '[OAuth2CallbackHandler] incoming callback — ${uri.toString()}');
 
     final provider = _providers[uri.scheme];
     if (provider != null) {
       provider.handleRedirectCallback(uri);
     } else {
       AuthyraLogger.warning(
-        'OAuth2CallbackHandler: no provider registered for scheme "${uri.scheme}"',
+        '[OAuth2CallbackHandler] no provider registered for scheme "${uri.scheme}"',
       );
     }
   }
@@ -131,6 +131,6 @@ class OAuth2CallbackHandler {
   /// Useful in test teardowns to prevent state from leaking between tests.
   static void clearAll() {
     _providers.clear();
-    AuthyraLogger.debug('OAuth2CallbackHandler: all providers cleared');
+    AuthyraLogger.debug('[OAuth2CallbackHandler] all providers cleared');
   }
 }
