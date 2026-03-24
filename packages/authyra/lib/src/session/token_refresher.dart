@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:authyra/src/interfaces/auth_provider.dart';
 import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/models/auth_session.dart';
+import 'package:authyra/src/models/auth_token_result.dart';
 
 /// Provides fresh [AuthTokenResult] for [session].
 ///
