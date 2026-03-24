@@ -37,7 +37,7 @@ jobs:
 
       - name: Build website
         working-directory: ./docs
-        run: NUXT_APP_BASE_URL=/authyra/ npm run build
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
