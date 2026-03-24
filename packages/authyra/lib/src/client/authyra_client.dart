@@ -142,8 +142,34 @@ class AuthyraClient with AuthyraLogging {
     _sessionManager = SessionManager(
       storage: storage,
       autoRefresh: config.autoRefresh,
+      refreshThreshold: config.refreshThreshold,
+      refreshProvider: (session) async {
+        final provider = _providerMap[session.providerId];
+        if (provider == null || !provider.supportsRefresh || !session.canRefresh) {
+          return null;
+        }
+        return provider.refreshToken(session.refreshToken!);
+      },
     );
     _sessionManager.addListener(_onSessionChanged);
+    _sessionManager.setRefreshCallbacks(
+      onSuccess: (session) {
+        _eventBus.emit(TokenRefreshEvent(user: session.user, success: true));
+        _emitAuthState(AuthState.authenticated(session.user));
+      },
+      onFailure: (session, error) {
+        _eventBus.emit(TokenRefreshEvent(
+          user: session.user,
+          success: false,
+          errorMessage: error,
+        ));
+        _eventBus.emit(SessionExpiredEvent(
+          user: session.user,
+          expiredAt: session.expirationOrNow,
+        ));
+        _emitAuthState(AuthState.unauthenticated());
+      },
+    );
 
     if (callbacks != null) {
       _callbacks = callbacks;
@@ -445,10 +471,10 @@ class AuthyraClient with AuthyraLogging {
 
   /// Silently refreshes the active session's access token.
   ///
-  /// Delegates to [AuthProvider.refreshToken] for the active session's
-  /// provider. On success the session is updated with new tokens and a
-  /// [TokenRefreshEvent] is emitted. On failure the session is removed and
-  /// [AuthState.unauthenticated] is emitted via a [SessionExpiredEvent].
+  /// Delegates to [SessionManager.refreshActiveSession], which invokes the
+  /// [TokenRefresher] with the configured retry policy. On success the session
+  /// is updated and [TokenRefreshEvent] is emitted. On failure the session is
+  /// cleared and [SessionExpiredEvent] + [AuthState.unauthenticated] are emitted.
   ///
   /// Returns `true` when the refresh succeeded, `false` when the provider
   /// does not support refresh or no refresh token is available.
@@ -465,32 +491,13 @@ class AuthyraClient with AuthyraLogging {
         logDebug('Provider "${session.providerId}" does not support refresh');
         return false;
       }
-      if (session.refreshToken == null) {
+      if (!session.canRefresh) {
         logWarning('No refresh token for user: ${session.user.id}');
         return false;
       }
 
-      logInfo('Refreshing session — user: ${session.user.id}');
-      final result = await provider.refreshToken(session.refreshToken!);
-
-      if (result == null) {
-        logWarning(
-          'Refresh returned null — forcing re-auth for user: ${session.user.id}',
-        );
-        await _expireSession(session, errorMessage: 'Refresh token rejected by provider');
-        return false;
-      }
-
-      final refreshed = session.refreshed(
-        newAccessToken: result.accessToken,
-        newRefreshToken: result.refreshToken,
-        newExpiresAt: result.expiresAt,
-      );
-
-      await _sessionManager.updateSession(session.user.id, refreshed);
-      logInfo('Session refreshed — user: ${session.user.id}');
-      _eventBus.emit(TokenRefreshEvent(user: session.user, success: true));
-      return true;
+      logInfo('Manual refresh requested — user: ${session.user.id}');
+      return await _sessionManager.refreshActiveSession();
     } on AuthException {
       rethrow;
     } catch (e, stackTrace) {
@@ -523,8 +530,9 @@ class AuthyraClient with AuthyraLogging {
     if (config.autoRefresh &&
         rawSession.shouldRefresh(threshold: config.refreshThreshold)) {
       logInfo(
-          'Session expiring soon — auto-refreshing for user: ${rawSession.user.id}');
-      await _tryAutoRefresh(rawSession);
+          'Session expiring soon — refreshing for user: ${rawSession.user.id}');
+      final succeeded = await _sessionManager.refreshActiveSession();
+      if (!succeeded) return null;
       final refreshedSession = _sessionManager.activeSession;
       if (refreshedSession == null || refreshedSession.isExpired) return null;
       return refreshedSession;
@@ -600,67 +608,6 @@ class AuthyraClient with AuthyraLogging {
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
-
-  /// Auto-refreshes [session] when the token is expiring or expired.
-  ///
-  /// On success: updates session in registry, emits [TokenRefreshEvent].
-  /// On failure: clears session, emits [TokenRefreshEvent] + [SessionExpiredEvent],
-  ///             transitions state to [AuthState.unauthenticated].
-  Future<void> _tryAutoRefresh(AuthSession session) async {
-    final provider = _providerMap[session.providerId];
-
-    if (provider == null ||
-        !provider.supportsRefresh ||
-        session.refreshToken == null) {
-      logWarning(
-          'Cannot auto-refresh (no refresh support) — user: ${session.user.id}');
-      await _expireSession(session,
-          errorMessage: 'Provider does not support refresh or no refresh token');
-      return;
-    }
-
-    try {
-      logInfo('Auto-refreshing session — user: ${session.user.id}');
-      final result = await provider.refreshToken(session.refreshToken!);
-
-      if (result == null) {
-        logWarning(
-            'Auto-refresh returned null — session expired for user: ${session.user.id}');
-        await _expireSession(session,
-            errorMessage: 'Refresh token rejected by provider');
-        return;
-      }
-
-      final refreshedSession = session.refreshed(
-        newAccessToken: result.accessToken,
-        newRefreshToken: result.refreshToken,
-        newExpiresAt: result.expiresAt,
-      );
-
-      await _sessionManager.updateSession(session.user.id, refreshedSession);
-      logInfo('Auto-refresh succeeded — user: ${session.user.id}');
-      _eventBus.emit(TokenRefreshEvent(user: session.user, success: true));
-    } catch (e, stackTrace) {
-      logError(
-          'Auto-refresh failed for user: ${session.user.id}', e, stackTrace);
-      await _expireSession(session, errorMessage: e.toString());
-    }
-  }
-
-  /// Clears [session], emits expiry events, and transitions to unauthenticated.
-  Future<void> _expireSession(AuthSession session, {String? errorMessage}) async {
-    await _sessionManager.clearActiveSession();
-    _eventBus.emit(TokenRefreshEvent(
-      user: session.user,
-      success: false,
-      errorMessage: errorMessage,
-    ));
-    _eventBus.emit(SessionExpiredEvent(
-      user: session.user,
-      expiredAt: session.expirationOrNow,
-    ));
-    _emitAuthState(AuthState.unauthenticated());
-  }
 
   /// Updates and activates an existing session after a repeated sign-in.
   Future<void> _refreshExistingSession(

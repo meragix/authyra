@@ -7,6 +7,7 @@ import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/session/session_registry.dart';
 import 'package:authyra/src/interfaces/auth_storage.dart';
+import 'package:authyra/src/session/token_refresher.dart';
 
 /// Callback invoked whenever the active [AuthSession] changes.
 ///
@@ -76,13 +77,35 @@ class SessionManager with AuthyraLogging {
   /// Registered change listeners (callback-based, complementary to the stream).
   final _listeners = <SessionChangeCallback>[];
 
+  // Background token refresher; non-null when a [RefreshProvider] was supplied.
+  TokenRefresher? _tokenRefresher;
+
+  // Provider callback and threshold supplied at construction time.
+  final RefreshProvider? _refreshProvider;
+  final Duration _refreshThreshold;
+
+  // External callbacks wired up by AuthyraClient for event emission.
+  void Function(AuthSession session)? _onRefreshSuccess;
+  void Function(AuthSession session, String? error)? _onRefreshFailure;
+
   /// Creates a [SessionManager].
   ///
   /// Call [initialize] before invoking any other method.
+  ///
+  /// [refreshProvider] is an optional callback that obtains fresh tokens for
+  /// a given session. When supplied alongside [autoRefresh] `true`, a
+  /// [TokenRefresher] is started during [initialize] to proactively renew
+  /// expiring tokens in the background.
+  ///
+  /// [refreshThreshold] controls how far ahead of expiry a proactive refresh
+  /// is triggered. Defaults to 5 minutes.
   SessionManager({
     required this.storage,
     this.autoRefresh = true,
-  });
+    RefreshProvider? refreshProvider,
+    Duration refreshThreshold = const Duration(minutes: 5),
+  })  : _refreshProvider = refreshProvider,
+        _refreshThreshold = refreshThreshold;
 
   // ---------------------------------------------------------------------------
   // Public accessors (synchronous, in-memory)
@@ -140,6 +163,22 @@ class SessionManager with AuthyraLogging {
         }
       }
 
+      // Start the background refresh scheduler when a provider was supplied.
+      final refreshProvider = _refreshProvider;
+      if (refreshProvider != null) {
+        _tokenRefresher = TokenRefresher(
+          provider: refreshProvider,
+          threshold: _refreshThreshold,
+        );
+        if (autoRefresh) {
+          _tokenRefresher!.start(
+            getSession: () => _registry.activeSession,
+            onRefreshed: _handleRefreshSuccess,
+            onExpired: _handleRefreshFailure,
+          );
+        }
+      }
+
       logInfo(
         'SessionManager ready — ${_registry.accountCount} account(s) loaded',
       );
@@ -155,6 +194,7 @@ class SessionManager with AuthyraLogging {
   /// Call this when the owning object is being disposed (e.g., in
   /// `AuthyraInstance.dispose`). The manager must not be used after disposal.
   Future<void> dispose() async {
+    _tokenRefresher?.stop();
     await _sessionController.close();
     _listeners.clear();
     logDebug('SessionManager disposed');
@@ -177,6 +217,26 @@ class SessionManager with AuthyraLogging {
   /// A no-op if [callback] was never registered.
   void removeListener(SessionChangeCallback callback) {
     _listeners.remove(callback);
+  }
+
+  /// Wires up external callbacks for token refresh outcomes.
+  ///
+  /// [onSuccess] is called with the updated [AuthSession] after a successful
+  /// background or on-demand refresh. Typically used by [AuthyraClient] to
+  /// emit [TokenRefreshEvent] and update the [AuthState] stream.
+  ///
+  /// [onFailure] is called with the expired session and an optional error
+  /// message when all refresh attempts are exhausted. Typically used by
+  /// [AuthyraClient] to emit [SessionExpiredEvent] and transition to
+  /// [AuthState.unauthenticated].
+  ///
+  /// Call this once during construction, before [initialize].
+  void setRefreshCallbacks({
+    void Function(AuthSession session)? onSuccess,
+    void Function(AuthSession session, String? error)? onFailure,
+  }) {
+    _onRefreshSuccess = onSuccess;
+    _onRefreshFailure = onFailure;
   }
 
   // ---------------------------------------------------------------------------
@@ -465,6 +525,28 @@ class SessionManager with AuthyraLogging {
     return session != null && !session.isExpired;
   }
 
+  /// Performs an immediate, on-demand refresh of the active session.
+  ///
+  /// Delegates to [TokenRefresher.refreshNow]. On success the session is
+  /// updated in the registry and [_onRefreshSuccess] is called. On failure
+  /// the session is expired and [_onRefreshFailure] is called.
+  ///
+  /// Returns `true` on success. Returns `false` when there is no active
+  /// session, no [TokenRefresher] was configured, or all retry attempts fail.
+  Future<bool> refreshActiveSession() async {
+    final session = _registry.activeSession;
+    if (session == null || _tokenRefresher == null) return false;
+
+    final updated = await _tokenRefresher!.refreshNow(session);
+    if (updated != null) {
+      await _handleRefreshSuccess(session.user.id, updated);
+      return true;
+    } else {
+      await _handleRefreshFailure(session, 'On-demand refresh failed');
+      return false;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Advanced / debug
   // ---------------------------------------------------------------------------
@@ -515,6 +597,59 @@ class SessionManager with AuthyraLogging {
       logError('Failed to persist registry', e, stackTrace);
       throw StorageException('save registry', e);
     }
+  }
+
+  /// Called by [TokenRefresher] on a successful token refresh.
+  ///
+  /// Updates the in-memory registry and persists it, notifies stream listeners,
+  /// then invokes the external [_onRefreshSuccess] callback (used by
+  /// [AuthyraClient] to emit [TokenRefreshEvent]).
+  Future<void> _handleRefreshSuccess(String userId, AuthSession updated) async {
+    await _mutex.synchronized(() async {
+      try {
+        final newRegistry = _registry.updateSession(userId, updated);
+        await _saveRegistry(newRegistry);
+        _notifyListeners(newRegistry.activeSession);
+        logInfo('Session token refreshed for user: $userId');
+      } catch (e, stackTrace) {
+        logError(
+          'Failed to persist refreshed session for user: $userId',
+          e,
+          stackTrace,
+        );
+      }
+    });
+    _onRefreshSuccess?.call(updated);
+  }
+
+  /// Called by [TokenRefresher] when all refresh attempts are exhausted.
+  ///
+  /// Removes the expired session from the registry, notifies stream listeners,
+  /// then invokes the external [_onRefreshFailure] callback (used by
+  /// [AuthyraClient] to emit [SessionExpiredEvent] and transition to
+  /// [AuthState.unauthenticated]).
+  Future<void> _handleRefreshFailure(
+    AuthSession session,
+    String? error,
+  ) async {
+    logWarning(
+      'Refresh failed for user: ${session.user.id}; '
+      'expiring session. Reason: ${error ?? 'unknown'}',
+    );
+    await _mutex.synchronized(() async {
+      try {
+        final newRegistry = _registry.removeSession(session.user.id);
+        await _saveRegistry(newRegistry);
+        _notifyListeners(newRegistry.activeSession);
+      } catch (e, stackTrace) {
+        logError(
+          'Failed to expire session for user: ${session.user.id}',
+          e,
+          stackTrace,
+        );
+      }
+    });
+    _onRefreshFailure?.call(session, error);
   }
 
   /// Emits [session] to the broadcast stream and invokes all callbacks.
