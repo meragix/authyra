@@ -7,8 +7,6 @@
 /// Built-in subclasses:
 /// - [CredentialsSignInParams]: email + password
 /// - [OAuth2SignInParams]: post-redirect code + state
-/// - [MagicLinkSignInParams]: passwordless email / token verification
-/// - [PhoneSignInParams]: SMS OTP
 abstract class AuthSignInParams {
   const AuthSignInParams();
 }
@@ -65,52 +63,16 @@ class OAuth2SignInParams extends AuthSignInParams {
   });
 }
 
-/// Parameters for a passwordless magic-link flow.
-///
-/// During the *request* phase, supply only [email].
-/// During the *verification* phase, supply both [email] and [token].
-///
-/// ```dart
-/// // Step 1: send the link
-/// await client.signIn('magic', params: MagicLinkSignInParams(email: 'alice@example.com'));
-///
-/// // Step 2: verify the token from the link
-/// await client.signIn('magic', params: MagicLinkSignInParams(
-///   email: 'alice@example.com',
-///   token: tokenFromUrl,
-/// ));
-/// ```
-class MagicLinkSignInParams extends AuthSignInParams {
-  /// The email address to send the magic link to.
-  final String email;
-
-  /// The token extracted from the magic link URL (only required for verification).
-  final String? token;
-
-  const MagicLinkSignInParams({required this.email, this.token});
-}
-
-/// Parameters for an SMS one-time-password flow.
-///
-/// During the *request* phase, supply only [phoneNumber].
-/// During the *verification* phase, supply both [phoneNumber] and [otp].
-///
-/// ```dart
-/// // Step 1: send the OTP
-/// await client.signIn('phone', params: PhoneSignInParams(phoneNumber: '+33612345678'));
-///
-/// // Step 2: verify
-/// await client.signIn('phone', params: PhoneSignInParams(
-///   phoneNumber: '+33612345678',
-///   otp: '123456',
-/// ));
-/// ```
-class PhoneSignInParams extends AuthSignInParams {
-  /// The E.164-formatted phone number (e.g., `'+33612345678'`).
-  final String phoneNumber;
-
-  /// The OTP code sent by SMS (only required for verification).
-  final String? otp;
-
-  const PhoneSignInParams({required this.phoneNumber, this.otp});
-}
+// v2 — not yet implemented:
+//
+// class MagicLinkSignInParams extends AuthSignInParams {
+//   final String email;
+//   final String? token; // null during request phase, required for verification
+//   const MagicLinkSignInParams({required this.email, this.token});
+// }
+//
+// class PhoneSignInParams extends AuthSignInParams {
+//   final String phoneNumber; // E.164 format, e.g. '+33612345678'
+//   final String? otp;        // null during request phase, required for verification
+//   const PhoneSignInParams({required this.phoneNumber, this.otp});
+// }

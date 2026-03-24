@@ -13,11 +13,9 @@ enum AuthProviderType {
   /// OAuth 2.0 / OIDC Authorization Code flow (with optional PKCE).
   oauth2,
 
-  /// Passwordless email / magic-link flow.
-  magicLink,
-
-  /// SMS one-time-password flow.
-  phone,
+  // v2 — not yet implemented:
+  // magicLink,  // Passwordless email / magic-link flow.
+  // phone,      // SMS one-time-password flow.
 
   /// Custom or composite strategy not covered by the above.
   custom,
@@ -235,12 +233,10 @@ abstract class AuthProvider {
   /// [params] carries provider-specific input as a typed [AuthSignInParams]
   /// subclass. Cast to the expected type inside your override:
   ///
-  /// | Strategy    | Expected type               |
-  /// |-------------|------------------------------|
-  /// | credentials | [CredentialsSignInParams]    |
-  /// | oauth2      | [OAuth2SignInParams]          |
-  /// | magicLink   | [MagicLinkSignInParams]       |
-  /// | phone       | [PhoneSignInParams]           |
+  /// | Strategy    | Expected type             |
+  /// |-------------|---------------------------|
+  /// | credentials | [CredentialsSignInParams] |
+  /// | oauth2      | [OAuth2SignInParams]       |
   ///
   /// Return `null` when authentication simply fails (e.g., wrong password).
   /// Throw an [AuthException] subclass for infrastructure errors
