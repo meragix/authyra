@@ -1,0 +1,1 @@
+// redirect GoRouter / auto_route selon AuthState

@@ -30,8 +30,8 @@ export 'src/providers/oauth2/oauth2_callback_handle.dart';
 // ---------------------------------------------------------------------------
 export 'src/providers/oauth2/prebuilt/google/google.dart';
 export 'src/providers/oauth2/prebuilt/github/github.dart';
-export 'src/providers/oauth2/prebuilt/apple/apple_provider.dart';
-export 'src/providers/oauth2/prebuilt/apple/apple_config.dart';
+export 'src/providers/apple/apple_provider.dart';
+export 'src/providers/apple/apple_config.dart';
 export 'src/providers/proxy/proxy_oauth_provider.dart';
 export 'src/providers/proxy/proxy_oauth_config.dart';
 

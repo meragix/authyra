@@ -1,7 +1,7 @@
 ---
 seo:
   title: Authyra | Authentication Framework for Dart & Flutter
-  description: Type-safe, modular authentication for Dart and Flutter. Pure Dart core, OAuth2 with PKCE, multi-account sessions, and reactive state — no black-box SDK.
+  description: Type-safe, modular authentication for Dart and Flutter. Pure Dart core, OAuth2 with PKCE, multi-account sessions, and reactive state. No black-box SDK.
 ---
 
 ::u-page-hero
@@ -59,7 +59,7 @@ Built for developers who own their auth
   [Pluggable]{.text-primary} everywhere
 
   #description
-  `AuthProvider` and `AuthStorage` are interfaces. Swap Google for SAML, `flutter_secure_storage` for Redis, or mock everything in tests — no subclasses required.
+  `AuthProvider` and `AuthStorage` are interfaces. Swap Google for SAML, `flutter_secure_storage` for Redis, or mock everything in tests. No subclasses required.
   :::
 
   :::u-page-feature
@@ -70,7 +70,7 @@ Built for developers who own their auth
   [Multi-account]{.text-primary} built in
 
   #description
-  `AccountManager` ships in the core — not as an add-on. Switch between work and personal accounts, sign out selectively, and clean expired sessions in one call.
+  `AccountManager` ships in the core, not as an add-on. Switch between work and personal accounts, sign out selectively, and clean expired sessions in one call.
   :::
 
   :::u-page-feature
@@ -81,7 +81,7 @@ Built for developers who own their auth
   Silent [token refresh]{.text-primary}
 
   #description
-  Providers that set `supportsRefresh: true` get automatic background renewal. When the refresh token expires, the session is cleared and `authStateChanges` emits — no surprises.
+  Providers that set `supportsRefresh: true` get automatic background renewal. When the refresh token expires, the session is cleared and `authStateChanges` emits. No surprises.
   :::
 
   :::u-page-feature
@@ -104,6 +104,6 @@ Built for developers who own their auth
   [Reactive]{.text-primary} by default
 
   #description
-  `authStateChanges` is a broadcast `Stream<AuthState>` with `Equatable` deduplication. Wire it to `StreamBuilder`, Riverpod, Bloc, or GoRouter — zero boilerplate.
+  `authStateChanges` is a broadcast `Stream<AuthState>` with `Equatable` deduplication. Wire it to `StreamBuilder`, Riverpod, Bloc, or GoRouter with zero boilerplate.
   :::
 ::

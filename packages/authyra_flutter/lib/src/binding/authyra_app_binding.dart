@@ -1,0 +1,1 @@
+// WidgetsBindingObserver: pause refresh en background
