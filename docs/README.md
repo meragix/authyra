@@ -12,10 +12,10 @@ Deployed automatically to GitHub Pages on every push to `main` that touches the 
 
 | Package | Description |
 |---|---|
-| [`authyra`](https://pub.dev/packages/authyra) | Core framework — pure Dart, zero Flutter dependency |
-| [`authyra_flutter`](https://pub.dev/packages/authyra_flutter) | Flutter layer — OAuth2 providers, `SecureAuthStorage`, widgets, GoRouter guard |
+| [`authyra`](https://pub.dev/packages/authyra) | Core framework, pure Dart, zero Flutter dependency |
+| [`authyra_flutter`](https://pub.dev/packages/authyra_flutter) | Flutter layer: OAuth2 providers, `SecureAuthStorage`, widgets, GoRouter guard |
 
-`authyra_flutter` re-exports the entire `authyra` package — Flutter apps only need one import.
+`authyra_flutter` re-exports the entire `authyra` package; Flutter apps only need one import.
 
 ---
 
@@ -34,7 +34,7 @@ authyra (pure Dart)
 authyra_flutter (Flutter + re-exports authyra)
 ├── OAuth2Provider         ← Authorization Code + PKCE (any IdP)
 ├── GoogleProvider         ← prebuilt Google Sign-In
-├── GitHubOAuth2Provider   ← prebuilt GitHub OAuth
+├── GitHubProvider   ← prebuilt GitHub OAuth
 ├── AppleProvider          ← Sign in with Apple
 ├── ProxyOAuthProvider     ← backend-delegated OAuth (secret stays server-side)
 ├── SecureAuthStorage      ← flutter_secure_storage implementation

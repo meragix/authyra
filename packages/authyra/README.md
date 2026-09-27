@@ -9,11 +9,11 @@ Authentication framework for Dart. No Flutter dependency. Runs on mobile, web, d
 
 ## What it does
 
-- **`AuthyraClient`** — stateless orchestrator. Handles provider registration, session creation, and token operations. No global state, fully injectable, 100% testable.
-- **`AuthyraInstance`** — singleton wrapper. Adds reactive `Stream<AuthState>`, synchronous state cache, and a one-call initialization API for app startup.
-- **`SessionManager`** — multi-account session registry. Persists, restores, switches, and cleans up sessions.
-- **`AuthStorage`** — pluggable interface. Bring your own persistence: `flutter_secure_storage`, Redis, encrypted file — anything.
-- **`AuthProvider`** — pluggable strategy interface. Implement it to add any authentication flow.
+- **`AuthyraClient`**: stateless orchestrator. Handles provider registration, session creation, and token operations. No global state, fully injectable, 100% testable.
+- **`AuthyraInstance`**: singleton wrapper. Adds reactive `Stream<AuthState>`, synchronous state cache, and a one-call initialization API for app startup.
+- **`SessionManager`**: multi-account session registry. Persists, restores, switches, and cleans up sessions.
+- **`AuthStorage`**: pluggable interface. Bring your own persistence: `flutter_secure_storage`, Redis, encrypted file, anything.
+- **`AuthProvider`**: pluggable strategy interface. Implement it to add any authentication flow.
 
 ---
 
@@ -59,7 +59,7 @@ void main() async {
     'password': 's3cr3t',
   });
 
-  // Synchronous state — no await
+  // Synchronous state, no await
   print(Authyra.instance.isAuthenticated);   // true
   print(Authyra.instance.currentUser?.email);
 
@@ -81,7 +81,7 @@ void main() async {
 
 ## Providers
 
-### `CredentialsProvider` — email / password
+### `CredentialsProvider`: email / password
 
 Two constructors depending on what your backend returns:
 
@@ -114,7 +114,7 @@ CredentialsProvider.withTokens(
 
 ### Custom provider
 
-Implement `AuthProvider` to plug in any strategy — SAML, magic link, phone OTP, a proprietary SSO:
+Implement `AuthProvider` to plug in any strategy: SAML, magic link, phone OTP, a proprietary SSO:
 
 ```dart
 class MagicLinkProvider implements AuthProvider {
@@ -184,7 +184,7 @@ await Authyra.instance.accounts.signOutAll();
 final removed = await Authyra.instance.accounts.cleanExpired();
 ```
 
-**What "multi-account" means here:** each signed-in identity (one `AuthUser`) gets its own entry in the registry above, and you can switch or sign out any of them independently. This is different from *account linking*, linking a Google sign-in and a GitHub sign-in as the same person. `AuthSession.linkedAccounts` exists as a data structure for that, but no built-in provider populates it with more than one entry: `GoogleProvider`, `GitHubOAuth2Provider`, and friends each derive `AuthUser.id` from that provider's own subject claim, so signing in with two different providers currently produces two separate accounts, not one linked account. A dedicated linking API isn't implemented yet.
+**What "multi-account" means here:** each signed-in identity (one `AuthUser`) gets its own entry in the registry above, and you can switch or sign out any of them independently. This is different from *account linking*, linking a Google sign-in and a GitHub sign-in as the same person. `AuthSession.linkedAccounts` exists as a data structure for that, but no built-in provider populates it with more than one entry: `GoogleProvider`, `GitHubProvider`, and friends each derive `AuthUser.id` from that provider's own subject claim, so signing in with two different providers currently produces two separate accounts, not one linked account. A dedicated linking API isn't implemented yet.
 
 ---
 

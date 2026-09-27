@@ -18,17 +18,19 @@ import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 /// 1. Create an OAuth App in
 ///    [GitHub Developer Settings](https://github.com/settings/developers) and
 ///    set the **Authorization callback URL** to your app's redirect URI.
-/// 2. Construct a [GitHubOAuth2Provider]:
+/// 2. Construct a [GitHubProvider]:
 ///
 /// ```dart
-/// final githubProvider = GitHubOAuth2Provider(
+/// final githubProvider = GitHubProvider(
 ///   clientId:     'YOUR_CLIENT_ID',
 ///   clientSecret: 'YOUR_CLIENT_SECRET',
 ///   redirectUri:  'myapp://auth/callback',
 /// );
 /// ```
 ///
-/// 3. Register and wire deep-link handling:
+/// 3. Register and wire deep-link handling once, at startup (no per-provider
+///    registration needed; routing is keyed by the CSRF `state` each sign-in
+///    attempt generates):
 ///
 /// ```dart
 /// final client = AuthyraClient(
@@ -36,7 +38,6 @@ import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 ///   storage: SecureAuthStorage(),
 /// );
 ///
-/// OAuth2CallbackHandler.registerProvider('myapp', githubProvider);
 /// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
 /// ```
 ///
@@ -72,11 +73,11 @@ import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 /// - [OAuth2Provider], the base class.
 /// - [GoogleProvider], the prebuilt Google provider.
 /// - [ProxyOAuthProvider], for backend-delegated flows (recommended for production mobile).
-class GitHubOAuth2Provider extends OAuth2Provider {
+class GitHubProvider extends OAuth2Provider {
   @override
   String get id => 'github';
 
-  /// Creates a [GitHubOAuth2Provider].
+  /// Creates a [GitHubProvider].
   ///
   /// - [clientId]: The OAuth App's client ID from GitHub Developer Settings.
   /// - [clientSecret]: The OAuth App's client secret. Required because GitHub
@@ -86,7 +87,7 @@ class GitHubOAuth2Provider extends OAuth2Provider {
   ///   Defaults to `'authyra://callback'`.
   /// - [scopes]: OAuth 2.0 scopes to request. Defaults to
   ///   `['user', 'user:email']`.
-  GitHubOAuth2Provider({
+  GitHubProvider({
     required String clientId,
     required String clientSecret,
     String redirectUri = 'authyra://callback',
@@ -101,7 +102,7 @@ class GitHubOAuth2Provider extends OAuth2Provider {
             userInfoEndpoint: 'https://api.github.com/user',
             redirectUri: redirectUri,
             scopes: scopes,
-            // GitHub does not support PKCE — client secret is required instead.
+            // GitHub does not support PKCE; client secret is required instead.
             usePkce: false,
             additionalTokenParams: const {
               // Ensure GitHub returns JSON instead of URL-encoded form data.
@@ -113,7 +114,7 @@ class GitHubOAuth2Provider extends OAuth2Provider {
 
   /// Extracts an [AuthUser] from GitHub's `/user` API response.
   ///
-  /// GitHub's `id` field is an integer — converted to `String` via `.toString()`
+  /// GitHub's `id` field is an integer, converted to `String` via `.toString()`
   /// to match [AuthUser.id]'s `String` type.
   ///
   /// GitHub API reference: https://docs.github.com/en/rest/users/users#get-the-authenticated-user

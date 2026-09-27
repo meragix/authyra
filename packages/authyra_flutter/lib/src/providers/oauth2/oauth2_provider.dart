@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math';
 
 import 'package:authyra/authyra.dart';
 import 'package:authyra/logging.dart';
+import 'package:authyra_flutter/src/providers/oauth2/oauth2_callback_handle.dart';
 import 'package:authyra_flutter/src/providers/oauth2/oauth2_config.dart';
-import 'package:crypto/crypto.dart';
+import 'package:authyra_flutter/src/providers/oauth2/oauth_security_values.dart';
+import 'package:authyra_flutter/src/providers/oauth2/pending_redirect_flow.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -31,7 +31,7 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// ## Setup
 ///
-/// Use a prebuilt subclass ([GoogleProvider], [GitHubOAuth2Provider]) or
+/// Use a prebuilt subclass ([GoogleProvider], [GitHubProvider]) or
 /// instantiate directly with a custom [OAuth2Config]:
 ///
 /// ```dart
@@ -56,22 +56,22 @@ import 'package:url_launcher/url_launcher.dart';
 /// ## Deep-link wiring
 ///
 /// The provider completes sign-in only when the redirect URI is delivered back
-/// to the app. Wire this up in your deep-link handler and call
-/// [handleRedirectCallback]:
+/// to the app. Wire this up once at startup and route every incoming link
+/// through [OAuth2CallbackHandler]:
 ///
 /// ```dart
-/// AppLinks().uriLinkStream.listen((uri) {
-///   OAuth2CallbackHandler.handleCallback(uri);
-/// });
-///
-/// // Register once at startup:
-/// OAuth2CallbackHandler.registerProvider('myapp', discordProvider);
+/// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
 /// ```
+///
+/// No per-provider registration step is needed: each [signIn] call registers
+/// its own CSRF `state` with [OAuth2CallbackHandler] for the duration of the
+/// attempt, so two [OAuth2Provider]s can safely share the same redirect
+/// scheme.
 ///
 /// ## Token refresh
 ///
 /// [supportsRefresh] is `true`. When [AuthyraClient] detects an expired
-/// session, it calls [refreshToken] automatically — no user interaction
+/// session, it calls [refreshToken] automatically; no user interaction
 /// required.
 ///
 /// ## Sign-out
@@ -82,22 +82,20 @@ import 'package:url_launcher/url_launcher.dart';
 ///
 /// See also:
 /// - [OAuth2Config], the configuration object.
-/// - [GoogleProvider] / [GitHubOAuth2Provider], prebuilt subclasses.
+/// - [GoogleProvider] / [GitHubProvider], prebuilt subclasses.
 /// - [ProxyOAuthProvider], for backend-delegated OAuth flows.
 /// - [OAuth2CallbackHandler], the global deep-link router.
-class OAuth2Provider with AuthyraLogging implements AuthProvider {
+class OAuth2Provider
+    with AuthyraLogging, PendingRedirectFlow<Map<String, String>>
+    implements AuthProvider {
   /// The configuration describing endpoints, credentials, and scopes.
   final OAuth2Config config;
 
   final Dio _dio;
 
-  // PKCE state — lives only for the duration of a single sign-in attempt.
+  // Security values, live only for the duration of a single sign-in attempt.
   String? _codeVerifier;
-  String? _codeChallenge;
   String? _state;
-
-  /// Resolves when the redirect URI deep link arrives via [handleRedirectCallback].
-  Completer<Map<String, String>>? _authCompleter;
 
   /// Creates an [OAuth2Provider].
   ///
@@ -129,12 +127,12 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   @override
   AuthProviderType get type => AuthProviderType.oauth2;
 
-  /// Always `true` — OAuth2 providers return refresh tokens that enable
+  /// Always `true`. OAuth2 providers return refresh tokens that enable
   /// silent session renewal via [refreshToken].
   @override
   bool get supportsRefresh => true;
 
-  /// `false` by default — most providers do not require explicit revocation.
+  /// `false` by default. Most providers do not require explicit revocation.
   ///
   /// Override and set to `true` in a subclass if the provider exposes a
   /// token revocation endpoint.
@@ -148,10 +146,11 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   /// Executes the full OAuth 2.0 Authorization Code flow.
   ///
   /// Steps:
-  /// 1. Generate PKCE verifier / challenge (when `config.usePkce` is `true`)
+  /// 1. Generate PKCE verifier/challenge (when `config.usePkce` is `true`)
   ///    and a CSRF state token.
-  /// 2. Build the authorization URL and open it in an external browser.
-  /// 3. Wait for [handleRedirectCallback] to deliver the code + state.
+  /// 2. Build the authorization URL and register the pending `state` with
+  ///    [OAuth2CallbackHandler].
+  /// 3. Open the URL in an external browser and wait for the redirect.
   /// 4. Verify the state (CSRF protection).
   /// 5. Exchange the code for tokens at [OAuth2Config.tokenEndpoint].
   /// 6. Fetch the user profile from [OAuth2Config.userInfoEndpoint].
@@ -159,27 +158,33 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   ///
   /// Throws [AuthenticationFailedException] on protocol or network errors.
   /// Throws [AuthenticationCancelledException] when the user dismisses the
-  /// browser or [OAuth2Config.timeout] elapses.
+  /// browser, a new sign-in attempt cancels this one, or
+  /// [OAuth2Config.timeout] elapses.
   @override
   Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
     try {
       logInfo('Starting OAuth2 flow for ${config.providerName}');
 
-      // Step 1: Generate PKCE values (and state for CSRF) if enabled.
-      if (config.usePkce) {
-        _generatePkceValues();
-        logDebug('PKCE enabled — code verifier generated');
-      } else {
-        _generateState();
-        logDebug('PKCE disabled — using state parameter only');
-      }
+      // Step 1: Generate PKCE + state values.
+      final security = OAuthSecurityValues.generate(usePkce: config.usePkce);
+      _codeVerifier = security.codeVerifier;
+      _state = security.state;
+      logDebug(config.usePkce
+          ? 'PKCE enabled, code verifier generated'
+          : 'PKCE disabled, using state parameter only');
 
-      // Step 2: Build authorization URL.
-      final authUrl = _buildAuthorizationUrl();
+      // Step 2: Build authorization URL and register the pending state.
+      final authUrl = _buildAuthorizationUrl(security);
       logDebug('Authorization URL built');
+      OAuth2CallbackHandler.registerPendingState(
+          _state!, handleRedirectCallback);
 
       // Step 3: Open browser and wait for the redirect callback.
-      final callbackParams = await _openAuthorizationUrl(authUrl);
+      final callbackParams = await awaitRedirect(
+        launch: () => _launchUrl(authUrl),
+        timeout: config.timeout,
+        buildCancelledError: () => AuthenticationCancelledException(id),
+      );
       logDebug('Redirect callback received');
 
       // Step 4: Verify state (CSRF protection).
@@ -219,7 +224,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
 
       logInfo('OAuth2 sign in successful for $id');
 
-      // Return the full result — never discard tokens.
+      // Return the full result, never discard tokens.
       return AuthSignInResult(
         user: user,
         accessToken: tokens['access_token'],
@@ -244,7 +249,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   // Sign out
   // ---------------------------------------------------------------------------
 
-  /// No-op by default — most OAuth providers do not require an explicit
+  /// No-op by default. Most OAuth providers do not require an explicit
   /// revocation call for mobile / SPA clients.
   ///
   /// Override in a subclass to call the provider's revocation endpoint, e.g.:
@@ -258,7 +263,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   /// ```
   @override
   Future<void> signOut({String? userId}) async {
-    logDebug('signOut called for ${config.providerName} — no-op');
+    logDebug('signOut called for ${config.providerName}, no-op');
   }
 
   // ---------------------------------------------------------------------------
@@ -271,7 +276,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   /// expired and [supportsRefresh] is `true`.
   ///
   /// Returns `null` if the refresh token is invalid or rejected by the
-  /// provider — the client will then require a full re-authentication.
+  /// provider; the client will then require a full re-authentication.
   ///
   /// Throws [TokenRefreshFailedException] on network errors.
   @override
@@ -327,25 +332,18 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   }
 
   // ---------------------------------------------------------------------------
-  // Deep-link callback (must be called by the app's link handler)
+  // Deep-link callback (routed here by OAuth2CallbackHandler)
   // ---------------------------------------------------------------------------
 
   /// Resolves the pending [signIn] call with the redirect callback parameters.
   ///
-  /// Call this from your app's deep-link stream handler. Typically you register
-  /// the provider with [OAuth2CallbackHandler] which calls this automatically:
-  ///
-  /// ```dart
-  /// // Register once at startup:
-  /// OAuth2CallbackHandler.registerProvider('myapp', discordProvider);
-  ///
-  /// // In your link handler:
-  /// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
-  /// ```
+  /// [OAuth2CallbackHandler] calls this automatically once it routes an
+  /// incoming deep link to this provider's pending `state`. Calling it
+  /// directly is only needed for custom routing setups.
   ///
   /// If called when no sign-in is in progress, the call is silently ignored.
   void handleRedirectCallback(Uri uri) {
-    if (_authCompleter == null || _authCompleter!.isCompleted) {
+    if (!hasPendingRedirect) {
       logWarning('Received callback but no pending auth request');
       return;
     }
@@ -356,45 +354,15 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
 
     // Also handle implicit flow (fragment-based) if code is not in params.
     if (params.isEmpty && uri.fragment.isNotEmpty) {
-      _authCompleter!.complete(Uri.splitQueryString(uri.fragment));
+      resolveRedirect(Uri.splitQueryString(uri.fragment));
     } else {
-      _authCompleter!.complete(params);
+      resolveRedirect(params);
     }
   }
 
   // ---------------------------------------------------------------------------
-  // PKCE & security helpers
+  // Security helpers
   // ---------------------------------------------------------------------------
-
-  /// Generates a cryptographically random PKCE code verifier, derives the
-  /// SHA-256 code challenge, and generates the CSRF state token.
-  void _generatePkceValues() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
-
-    _codeVerifier = base64UrlEncode(bytes)
-        .replaceAll('=', '')
-        .replaceAll('+', '-')
-        .replaceAll('/', '_');
-
-    final digest = sha256.convert(utf8.encode(_codeVerifier!));
-    _codeChallenge = base64UrlEncode(digest.bytes)
-        .replaceAll('=', '')
-        .replaceAll('+', '-')
-        .replaceAll('/', '_');
-
-    _generateState();
-  }
-
-  /// Generates a cryptographically random CSRF state token.
-  void _generateState() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    _state = base64UrlEncode(bytes)
-        .replaceAll('=', '')
-        .replaceAll('+', '-')
-        .replaceAll('/', '_');
-  }
 
   /// Verifies that the `state` in the callback matches the one sent in the
   /// authorization request (CSRF protection, RFC 6749 §10.12).
@@ -408,7 +376,7 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
 
     if (params['state'] != _state) {
       throw AuthenticationFailedException(
-        'State mismatch — possible CSRF attack detected for $id',
+        'State mismatch, possible CSRF attack detected for $id',
         providerName: id,
       );
     }
@@ -438,15 +406,15 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
   // ---------------------------------------------------------------------------
 
   /// Assembles the full authorization URL including PKCE and state params.
-  String _buildAuthorizationUrl() {
+  String _buildAuthorizationUrl(OAuthSecurityValues security) {
     final queryParams = {
       'client_id': config.clientId,
       'redirect_uri': config.redirectUri,
       'response_type': 'code',
       'scope': config.scopes.join(' '),
-      'state': _state!,
+      'state': security.state,
       if (config.usePkce) ...{
-        'code_challenge': _codeChallenge!,
+        'code_challenge': security.codeChallenge!,
         'code_challenge_method': 'S256',
       },
       ...config.additionalAuthParams,
@@ -457,45 +425,26 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
         .toString();
   }
 
-  /// Launches [url] in an external browser and waits for [handleRedirectCallback]
-  /// to resolve with the callback parameters.
-  Future<Map<String, String>> _openAuthorizationUrl(String url) async {
-    _authCompleter = Completer<Map<String, String>>();
+  /// Launches [url] in an external browser.
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
 
-    try {
-      final uri = Uri.parse(url);
-
-      if (!await canLaunchUrl(uri)) {
-        throw AuthenticationFailedException(
-          'Cannot launch authorization URL for $id',
-          providerName: id,
-        );
-      }
-
-      final launched =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) {
-        throw AuthenticationFailedException(
-          'Failed to launch authorization URL for $id',
-          providerName: id,
-        );
-      }
-
-      logDebug('Browser opened for $id — waiting for callback');
-
-      return await _authCompleter!.future.timeout(
-        config.timeout,
-        onTimeout: () => throw AuthenticationCancelledException(id),
-      );
-    } on AuthException {
-      rethrow;
-    } catch (e) {
+    if (!await canLaunchUrl(uri)) {
       throw AuthenticationFailedException(
-        'Error during authorization URL launch for $id',
+        'Cannot launch authorization URL for $id',
         providerName: id,
-        originalError: e,
       );
     }
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      throw AuthenticationFailedException(
+        'Failed to launch authorization URL for $id',
+        providerName: id,
+      );
+    }
+
+    logDebug('Browser opened for $id, waiting for callback');
   }
 
   /// Exchanges the authorization [code] for access / refresh tokens.
@@ -592,12 +541,15 @@ class OAuth2Provider with AuthyraLogging implements AuthProvider {
     }
   }
 
-  /// Clears all per-request PKCE and state values after each sign-in attempt.
+  /// Clears all per-request PKCE/state values and pending-callback
+  /// registrations after each sign-in attempt.
   void _cleanup() {
+    if (_state != null) {
+      OAuth2CallbackHandler.unregisterPendingState(_state!);
+    }
     _codeVerifier = null;
-    _codeChallenge = null;
     _state = null;
-    _authCompleter = null;
+    cleanupRedirect();
     logDebug('OAuth2 temporary state cleaned up for $id');
   }
 }

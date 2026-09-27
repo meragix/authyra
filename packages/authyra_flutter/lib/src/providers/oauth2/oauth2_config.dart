@@ -4,10 +4,10 @@ import 'package:authyra/authyra.dart';
 ///
 /// [OAuth2Config] is an immutable value object that describes everything an
 /// [OAuth2Provider] needs to execute the Authorization Code flow with optional
-/// PKCE — without hard-coding provider-specific logic into the provider itself.
+/// PKCE without hard-coding provider-specific logic into the provider itself.
 ///
 /// Prebuilt configs are available via [GoogleProvider] and
-/// [GitHubOAuth2Provider]. Use [OAuth2Config] directly when integrating a
+/// [GitHubProvider]. Use [OAuth2Config] directly when integrating a
 /// custom identity provider.
 ///
 /// ## Minimal example (custom provider)
@@ -31,7 +31,7 @@ import 'package:authyra/authyra.dart';
 ///
 /// See also:
 /// - [OAuth2Provider], which consumes this config.
-/// - [GoogleProvider] / [GitHubOAuth2Provider], prebuilt subclasses.
+/// - [GoogleProvider] / [GitHubProvider], prebuilt subclasses.
 class OAuth2Config {
   // ---------------------------------------------------------------------------
   // Identity provider endpoints

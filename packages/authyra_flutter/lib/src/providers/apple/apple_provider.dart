@@ -16,11 +16,11 @@ import 'apple_config.dart';
 /// Implements the Apple OAuth 2.0 Authorization Code flow with PKCE and a
 /// nonce, handling the Apple-specific requirements:
 ///
-/// - **Dynamic client secret** — the ES256 JWT is generated on every request
+/// - **Dynamic client secret**: the ES256 JWT is generated on every request
 ///   via [JwtUtils.generateAppleClientSecret]. No static secret is needed.
-/// - **No userinfo endpoint** — the user profile is decoded from the `id_token`
+/// - **No userinfo endpoint**: the user profile is decoded from the `id_token`
 ///   JWT returned by `https://appleid.apple.com/auth/token`.
-/// - **First-sign-in user data** — Apple sends `name` and `email` only once,
+/// - **First-sign-in user data**: Apple sends `name` and `email` only once,
 ///   encoded as a `user` query parameter in the callback URL. The provider
 ///   extracts these automatically and folds them into [AuthUser].
 ///
@@ -33,7 +33,7 @@ import 'apple_config.dart';
 ///  │      [+ user={"name":{…},"email":"…"} on first sign-in]
 ///  │── POST /auth/token (with ES256 client_secret) ►│
 ///  │◄── { access_token, refresh_token, id_token } ──│
-///  │── decode id_token (JWT) — no HTTP call needed  │
+///  │── decode id_token (JWT), no HTTP call needed  │
 /// ```
 ///
 /// ## Setup
@@ -54,9 +54,9 @@ import 'apple_config.dart';
 ///   storage: SecureAuthStorage(),
 /// );
 ///
-/// // Wire deep-link callbacks:
-/// OAuth2CallbackHandler.registerProvider('https', appleProvider);
-/// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
+/// // Wire deep-link callbacks directly. AppleProvider manages its own
+/// // pending flow and is not routed through OAuth2CallbackHandler:
+/// AppLinks().uriLinkStream.listen(appleProvider.handleRedirectCallback);
 /// ```
 ///
 /// ## Sign in
@@ -75,7 +75,7 @@ import 'apple_config.dart';
 /// | `name`           | `user` callback param (first sign-in only)      |
 /// | `metadata`       | `email_verified`, `given_name`, `family_name`   |
 ///
-/// **Important**: Persist `user.name` immediately after the first sign-in —
+/// **Important**: Persist `user.name` immediately after the first sign-in;
 /// Apple will not send it again.
 ///
 /// ## Token refresh
@@ -129,11 +129,11 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
   @override
   AuthProviderType get type => AuthProviderType.oauth2;
 
-  /// Always `true` — Apple issues refresh tokens that enable silent renewal.
+  /// Always `true`. Apple issues refresh tokens that enable silent renewal.
   @override
   bool get supportsRefresh => true;
 
-  /// `false` — Apple does not expose a client-side revocation endpoint.
+  /// `false`. Apple does not expose a client-side revocation endpoint.
   @override
   bool get supportsSignOut => false;
 
@@ -189,7 +189,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
       }
 
       // On first sign-in, Apple sends a `user` query parameter with name/email.
-      // This is never sent again — must be persisted immediately.
+      // This is never sent again; must be persisted immediately.
       final userJsonStr = callbackParams['user'];
       Map<String, dynamic>? appleUserJson;
       if (userJsonStr != null) {
@@ -247,10 +247,10 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
   // Sign out
   // ---------------------------------------------------------------------------
 
-  /// No-op — Apple does not expose a client-side token revocation endpoint.
+  /// No-op. Apple does not expose a client-side token revocation endpoint.
   @override
   Future<void> signOut({String? userId}) async {
-    logDebug('Apple signOut called — no-op');
+    logDebug('Apple signOut called, no-op');
   }
 
   // ---------------------------------------------------------------------------
@@ -260,7 +260,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
   /// Exchanges [refreshToken] for a fresh access token.
   ///
   /// Apple requires the same dynamically generated ES256 [client_secret] for
-  /// refresh calls. The refresh token itself is **not rotated** — Apple
+  /// refresh calls. The refresh token itself is **not rotated**; Apple
   /// re-uses the same token across refreshes.
   ///
   /// Returns `null` if the refresh token has been revoked or is otherwise
@@ -294,7 +294,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
 
       logDebug('Apple token refreshed successfully');
 
-      // Apple does not rotate refresh tokens — pass null to retain existing.
+      // Apple does not rotate refresh tokens; pass null to retain existing.
       return AuthTokenResult(
         accessToken: newAccessToken,
         refreshToken: null,
@@ -321,14 +321,12 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
 
   /// Resolves the pending [signIn] call with the redirect callback parameters.
   ///
-  /// Wire this in your deep-link handler via [OAuth2CallbackHandler]:
+  /// Wire this directly in your deep-link handler; unlike [OAuth2Provider],
+  /// [AppleProvider] manages its own pending flow and is not routed through
+  /// [OAuth2CallbackHandler]:
   ///
   /// ```dart
-  /// // Register once at startup:
-  /// OAuth2CallbackHandler.registerProvider('https', appleProvider);
-  ///
-  /// // In your link handler:
-  /// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
+  /// AppLinks().uriLinkStream.listen(appleProvider.handleRedirectCallback);
   /// ```
   ///
   /// If no sign-in is in progress, the call is silently ignored.
@@ -371,7 +369,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
         .replaceAll('+', '-')
         .replaceAll('/', '_');
 
-    // Nonce — raw lowercase hex, included in id_token for replay protection.
+    // Nonce: raw lowercase hex, included in id_token for replay protection.
     final nonceBytes = List<int>.generate(16, (_) => random.nextInt(256));
     _nonce = nonceBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
@@ -381,7 +379,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
   void _verifyState(Map<String, String> params) {
     if (params['state'] != _state) {
       throw AuthenticationFailedException(
-        'State mismatch — possible CSRF attack detected for Apple Sign In',
+        'State mismatch, possible CSRF attack detected for Apple Sign In',
         providerName: id,
       );
     }
@@ -452,7 +450,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
       );
     }
 
-    logDebug('Browser opened for Apple — waiting for callback');
+    logDebug('Browser opened for Apple, waiting for callback');
 
     return _authCompleter!.future.timeout(
       config.timeout,
@@ -462,7 +460,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
 
   /// Exchanges the authorization [code] for access/refresh/id tokens.
   ///
-  /// Generates a fresh ES256 client secret for each call — Apple requires
+  /// Generates a fresh ES256 client secret for each call. Apple requires
   /// this instead of a static secret.
   Future<Map<String, String>> _exchangeCodeForTokens(String code) async {
     logDebug('Exchanging Apple authorization code for tokens');
@@ -536,7 +534,7 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
     final emailVerified = claims['email_verified'];
 
     // Name is only present on the very first sign-in via the `user` callback
-    // parameter — it is never included in subsequent id_tokens.
+    // parameter; it is never included in subsequent id_tokens.
     String? firstName;
     String? lastName;
     if (appleUserJson != null) {

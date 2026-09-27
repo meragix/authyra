@@ -3,7 +3,7 @@
 [![pub.dev](https://img.shields.io/pub/v/authyra_flutter.svg)](https://pub.dev/packages/authyra_flutter)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/meragix/authyra/blob/main/LICENSE)
 
-Flutter layer for [authyra](https://pub.dev/packages/authyra). Adds OAuth2 providers (Google, GitHub, Apple), `SecureAuthStorage`, and a `AuthGuard` widget on top of the core framework. Re-exports the entire `authyra` package — one import, everything included.
+Flutter layer for [authyra](https://pub.dev/packages/authyra). Adds OAuth2 providers (Google, GitHub, Apple), `SecureAuthStorage`, and a `AuthGuard` widget on top of the core framework. Re-exports the entire `authyra` package: one import, everything included.
 
 ---
 
@@ -41,7 +41,7 @@ void main() async {
           },
         ),
         GoogleProvider(clientId: 'YOUR_GOOGLE_CLIENT_ID'),
-        GitHubOAuth2Provider(
+        GitHubProvider(
           clientId: 'YOUR_GITHUB_CLIENT_ID',
           redirectUri: 'myapp://auth/callback',
         ),
@@ -67,30 +67,22 @@ final googleProvider = GoogleProvider(
   // scopes default to ['openid', 'email', 'profile']
 );
 
-// Wire deep-link callback once at startup:
-OAuth2CallbackHandler.registerProvider(
-  'com.googleusercontent.apps.YOUR_CLIENT_ID',
-  googleProvider,
-);
-AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
-
-// Sign in:
 await Authyra.instance.signIn('google');
 ```
 
 ### GitHub
 
 ```dart
-final githubProvider = GitHubOAuth2Provider(
+final githubProvider = GitHubProvider(
   clientId: 'YOUR_CLIENT_ID',
   redirectUri: 'myapp://auth/callback',
   // scopes default to ['read:user', 'user:email']
 );
 
-OAuth2CallbackHandler.registerProvider('myapp', githubProvider);
-
 await Authyra.instance.signIn('github');
 ```
+
+Both `GoogleProvider` and `GitHubProvider` extend `OAuth2Provider`, so a single `OAuth2CallbackHandler.handleCallback` wiring at startup (see [Deep-link setup](#deep-link-setup)) covers every OAuth2-based provider you register, even if they share a redirect scheme.
 
 ### Apple
 
@@ -102,6 +94,8 @@ final appleProvider = AppleProvider(
 
 await Authyra.instance.signIn('apple');
 ```
+
+`AppleProvider` manages its own pending flow directly; it is not routed through `OAuth2CallbackHandler`. Wire its deep link separately (see [Deep-link setup](#deep-link-setup)).
 
 ### Any OAuth2 provider
 
@@ -158,7 +152,7 @@ AppLinks().uriLinkStream.listen((uri) {
 
 ## Storage
 
-`SecureAuthStorage` wraps [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage) (Keychain on iOS, Keystore on Android). Use it as-is — no configuration required.
+`SecureAuthStorage` wraps [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage) (Keychain on iOS, Keystore on Android). Use it as-is, no configuration required.
 
 ```dart
 storage: SecureAuthStorage()
@@ -214,15 +208,23 @@ await Authyra.instance.accounts.signOutAll();
 
 ## Deep-link setup
 
-OAuth2 providers rely on deep links to receive the authorization callback. Wire once at startup with `OAuth2CallbackHandler`:
+`OAuth2Provider`-based providers (`GoogleProvider`, `GitHubProvider`, any custom `OAuth2Provider`) rely on deep links to receive the authorization callback. Wire this once at startup, no per-provider registration needed:
 
 ```dart
-// Register each provider under the URI scheme it expects
-OAuth2CallbackHandler.registerProvider('com.googleusercontent.apps.YOUR_ID', googleProvider);
-OAuth2CallbackHandler.registerProvider('myapp', githubProvider);
-
-// Forward all incoming links to the handler
 AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
+```
+
+Routing is keyed by the CSRF `state` each sign-in attempt generates, not by URI scheme, so two providers can safely share the same redirect scheme (e.g. `myapp://auth/callback` for both GitHub and a custom Discord provider).
+
+`AppleProvider` and `ProxyOAuthProvider` manage their own pending flow directly and are not routed through `OAuth2CallbackHandler`; wire their deep link explicitly instead:
+
+```dart
+AppLinks().uriLinkStream.listen((uri) {
+  appleProvider.handleRedirectCallback(uri);
+  if (uri.toString().startsWith('myapp://auth/callback')) {
+    googleProxy.handleDeepLink(uri);
+  }
+});
 ```
 
 ---

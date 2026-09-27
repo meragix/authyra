@@ -1,95 +1,71 @@
 import 'package:authyra/logging.dart';
-import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 
-/// Global deep-link router for [OAuth2Provider] instances.
+/// Global deep-link dispatcher for [OAuth2Provider] instances.
 ///
-/// [OAuth2CallbackHandler] maintains a registry of active [OAuth2Provider]s
-/// keyed by their redirect URI scheme (e.g., `'myapp'` from
-/// `myapp://auth/callback`). When a deep link arrives, [handleCallback]
-/// locates the matching provider and forwards the URI to
-/// [OAuth2Provider.handleRedirectCallback].
+/// Routes an incoming redirect [Uri] to the pending sign-in attempt whose
+/// `state` query parameter matches. `state` is a fresh, cryptographically
+/// random value generated per sign-in attempt (CSRF protection, RFC 6749
+/// §10.12), so routing on it means two providers can safely share the same
+/// redirect URI scheme; there is no scheme-collision risk to manage.
+///
+/// [OAuth2Provider] registers and unregisters itself automatically around
+/// each [OAuth2Provider.signIn] call. Most apps only ever call
+/// [handleCallback]; [registerPendingState] / [unregisterPendingState] are
+/// internal plumbing exposed for custom [AuthProvider] implementations that
+/// want to reuse the same dispatcher.
 ///
 /// ## Setup (once, at app startup)
 ///
 /// ```dart
-/// // Register each provider against its URI scheme:
-/// OAuth2CallbackHandler.registerProvider('myapp', googleProvider);
-/// OAuth2CallbackHandler.registerProvider('myapp', githubProvider);
-/// // Note: if multiple providers share the same scheme, the last one wins.
-/// // Use unique schemes per provider if you need parallel multi-provider support.
-/// ```
-///
-/// ## Wiring the deep-link stream
-///
-/// Wire your platform deep-link handler to [handleCallback]:
-///
-/// ```dart
 /// // With package:app_links:
 /// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
-///
-/// // Or manually in onGenerateRoute / GoRouter redirect:
-/// final incoming = Uri.parse(link);
-/// OAuth2CallbackHandler.handleCallback(incoming);
 /// ```
 ///
-/// ## Cleanup
+/// No per-provider registration step is needed: each [OAuth2Provider.signIn]
+/// call registers its own `state` for the duration of the flow.
 ///
-/// Unregister providers when they are no longer needed (e.g., on dispose):
-///
-/// ```dart
-/// OAuth2CallbackHandler.unregisterProvider('myapp');
-/// ```
-///
-/// Or clear everything in tests:
+/// ## Testing
 ///
 /// ```dart
 /// tearDown(OAuth2CallbackHandler.clearAll);
 /// ```
 ///
-/// ## Routing strategy
-///
-/// Callbacks are routed by `uri.scheme`. This means:
-/// - Each unique custom scheme routes to exactly one registered provider.
-/// - If two providers share a scheme (e.g., both use `myapp://`), register
-///   them under distinct schemes or use [ProxyOAuthProvider] which handles
-///   its own callback routing.
-///
 /// See also:
-/// - [OAuth2Provider.handleRedirectCallback], the per-provider handler.
-/// - [ProxyOAuthProvider], which manages its own deep-link routing via
-///   [ProxyOAuthProvider.handleDeepLink].
+/// - [OAuth2Provider.handleRedirectCallback], invoked once routing succeeds.
+/// - [ProxyOAuthProvider], which routes its own deep link directly via
+///   [ProxyOAuthProvider.handleDeepLink] instead of this dispatcher.
 class OAuth2CallbackHandler {
   OAuth2CallbackHandler._();
 
-  static final Map<String, OAuth2Provider> _providers = {};
+  static final Map<String, void Function(Uri uri)> _pendingByState = {};
 
   // ---------------------------------------------------------------------------
-  // Registration
+  // Registration (internal plumbing)
   // ---------------------------------------------------------------------------
 
-  /// Registers [provider] to receive deep-link callbacks for URIs whose
-  /// scheme matches [scheme].
+  /// Registers [onCallback] to receive the deep link whose `state` query
+  /// parameter equals [state].
   ///
-  /// [scheme] should be the URI scheme without `://`, e.g.:
-  /// - Custom scheme: `'myapp'` (matches `myapp://auth/callback?code=…`)
-  /// - Reverse client ID (Google): `'com.example.myapp'`
-  ///
-  /// Registering a second provider under the same [scheme] silently replaces
-  /// the first. Use distinct schemes for parallel multi-provider support.
-  static void registerProvider(String scheme, OAuth2Provider provider) {
-    _providers[scheme] = provider;
+  /// Called internally by [OAuth2Provider] at the start of each sign-in
+  /// attempt. Registering under a [state] that is already registered
+  /// replaces the previous registration.
+  static void registerPendingState(
+    String state,
+    void Function(Uri uri) onCallback,
+  ) {
+    _pendingByState[state] = onCallback;
     AuthyraLogger.debug(
-        '[OAuth2CallbackHandler] registered provider "${provider.id}" for scheme "$scheme"');
+        '[OAuth2CallbackHandler] pending state registered: $state');
   }
 
-  /// Unregisters the provider associated with [scheme].
+  /// Removes the pending registration for [state], if any.
   ///
-  /// Safe to call even if [scheme] was never registered.
-  static void unregisterProvider(String scheme) {
-    final removed = _providers.remove(scheme);
+  /// Safe to call even if [state] was never registered or already resolved.
+  static void unregisterPendingState(String state) {
+    final removed = _pendingByState.remove(state);
     if (removed != null) {
       AuthyraLogger.debug(
-          '[OAuth2CallbackHandler] unregistered provider "${removed.id}" for scheme "$scheme"');
+          '[OAuth2CallbackHandler] pending state unregistered: $state');
     }
   }
 
@@ -97,40 +73,52 @@ class OAuth2CallbackHandler {
   // Dispatch
   // ---------------------------------------------------------------------------
 
-  /// Routes an incoming deep-link [uri] to the matching registered provider.
+  /// Routes an incoming deep-link [uri] to the matching pending sign-in.
   ///
-  /// Looks up the provider by `uri.scheme` and delegates to
-  /// [OAuth2Provider.handleRedirectCallback]. Logs a warning if no provider
-  /// is registered for that scheme.
-  ///
-  /// Typically called from the platform's deep-link stream:
+  /// Reads `state` from the query parameters, falling back to the URI
+  /// fragment for implicit-flow redirects. Logs a warning and does nothing
+  /// if `state` is missing or does not match any pending sign-in (already
+  /// resolved, timed out, or never registered).
   ///
   /// ```dart
   /// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
   /// ```
   static void handleCallback(Uri uri) {
-    AuthyraLogger.debug(
-        '[OAuth2CallbackHandler] incoming callback — ${uri.toString()}');
+    final params = uri.queryParameters.isNotEmpty
+        ? uri.queryParameters
+        : (uri.fragment.isNotEmpty
+            ? Uri.splitQueryString(uri.fragment)
+            : const <String, String>{});
 
-    final provider = _providers[uri.scheme];
-    if (provider != null) {
-      provider.handleRedirectCallback(uri);
-    } else {
+    final state = params['state'];
+    if (state == null) {
       AuthyraLogger.warning(
-        '[OAuth2CallbackHandler] no provider registered for scheme "${uri.scheme}"',
+        '[OAuth2CallbackHandler] callback has no "state" parameter, ignored: $uri',
       );
+      return;
     }
+
+    final onCallback = _pendingByState[state];
+    if (onCallback == null) {
+      AuthyraLogger.warning(
+        '[OAuth2CallbackHandler] no pending sign-in for state "$state" '
+        '(unknown, already resolved, or timed out)',
+      );
+      return;
+    }
+
+    onCallback(uri);
   }
 
   // ---------------------------------------------------------------------------
   // Teardown
   // ---------------------------------------------------------------------------
 
-  /// Removes all registered providers.
+  /// Removes all pending registrations.
   ///
   /// Useful in test teardowns to prevent state from leaking between tests.
   static void clearAll() {
-    _providers.clear();
-    AuthyraLogger.debug('[OAuth2CallbackHandler] all providers cleared');
+    _pendingByState.clear();
+    AuthyraLogger.debug('[OAuth2CallbackHandler] all pending states cleared');
   }
 }

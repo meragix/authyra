@@ -80,7 +80,7 @@ Authyra's real competitor isn't Firebase or Auth0, they solve a different proble
 
 ## Core principles
 
-**Provider-agnostic.** Implement `AuthProvider` once to plug in any strategy. Ships with `CredentialsProvider` (core) and `OAuth2Provider` / `GoogleProvider` / `GitHubOAuth2Provider` / `AppleProvider` / `ProxyOAuthProvider` (`authyra_flutter`). Add your own for anything else: a SAML bridge, magic link, phone OTP.
+**Provider-agnostic.** Implement `AuthProvider` once to plug in any strategy. Ships with `CredentialsProvider` (core) and `OAuth2Provider` / `GoogleProvider` / `GitHubProvider` / `AppleProvider` / `ProxyOAuthProvider` (`authyra_flutter`). Add your own for anything else: a SAML bridge, magic link, phone OTP.
 
 **Session-first.** `SessionManager` owns the client-side session lifecycle: restore on app start, proactive token refresh with retry, sign-out, and a reactive `AuthState` stream. This is the part a raw OAuth/OIDC package leaves for you to build yourself.
 
@@ -211,7 +211,7 @@ The boundary that matters: **providers authenticate, Authyra manages the resulti
 | `CredentialsProvider.withTokens` | `authyra` | JWT backend: returns access + refresh tokens for `SessionManager` to persist |
 | `OAuth2Provider` | `authyra_flutter` | Authorization Code + PKCE (any IdP) |
 | `GoogleProvider` | `authyra_flutter` | Prebuilt Google Sign-In |
-| `GitHubOAuth2Provider` | `authyra_flutter` | Prebuilt GitHub OAuth |
+| `GitHubProvider` | `authyra_flutter` | Prebuilt GitHub OAuth |
 | `AppleProvider` | `authyra_flutter` | Sign in with Apple |
 | `ProxyOAuthProvider` | `authyra_flutter` | Backend-delegated OAuth (client secret stays server-side) |
 

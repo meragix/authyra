@@ -20,7 +20,9 @@ import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 /// final googleProvider = GoogleProvider(clientId: 'YOUR_CLIENT_ID');
 /// ```
 ///
-/// 3. Register it with [AuthyraClient] and wire the deep-link callback:
+/// 3. Register it with [AuthyraClient] and wire the deep-link callback once,
+///    at startup (no per-provider registration needed; routing is keyed by
+///    the CSRF `state` each sign-in attempt generates):
 ///
 /// ```dart
 /// final client = AuthyraClient(
@@ -29,10 +31,6 @@ import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 /// );
 ///
 /// // Deep-link handler (package:app_links or equivalent):
-/// OAuth2CallbackHandler.registerProvider(
-///   'com.googleusercontent.apps.YOUR_CLIENT_ID', // reverse client ID
-///   googleProvider,
-/// );
 /// AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
 /// ```
 ///
@@ -76,7 +74,7 @@ import 'package:authyra_flutter/src/providers/oauth2/oauth2_provider.dart';
 /// See also:
 /// - [OAuth2Provider], the base class.
 /// - [OAuth2Config], the configuration object.
-/// - [GitHubOAuth2Provider], the prebuilt GitHub provider.
+/// - [GitHubProvider], the prebuilt GitHub provider.
 class GoogleProvider extends OAuth2Provider {
   @override
   String get id => 'google';

@@ -1,7 +1,6 @@
-import 'dart:async';
-
 import 'package:authyra/authyra.dart';
 import 'package:authyra/logging.dart';
+import 'package:authyra_flutter/src/providers/oauth2/pending_redirect_flow.dart';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -14,7 +13,7 @@ import 'proxy_oauth_config.dart';
 /// (client secret, code exchange, token storage) on the server. The app only
 /// needs to:
 ///
-/// 1. Call [signIn] — which POSTs to your backend to obtain an authorization
+/// 1. Call [signIn], which POSTs to your backend to obtain an authorization
 ///    URL, then opens it in an external browser.
 /// 2. Register a deep-link handler and call [handleDeepLink] when the backend
 ///    redirects back to the app with a custom token.
@@ -74,14 +73,13 @@ import 'proxy_oauth_config.dart';
 /// - [ProxyOAuthConfig], the configuration object.
 /// - [OAuth2Provider], for direct client-side OAuth2 flows.
 /// - [CredentialsProvider], for email / password flows.
-class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
+class ProxyOAuthProvider
+    with AuthyraLogging, PendingRedirectFlow<Uri>
+    implements AuthProvider {
   /// The configuration describing backend endpoints and app callback scheme.
   final ProxyOAuthConfig config;
 
   final Dio _dio;
-
-  /// Completer resolved by [handleDeepLink] when the backend redirects back.
-  Completer<Uri>? _pendingCallback;
 
   /// Creates a [ProxyOAuthProvider].
   ///
@@ -116,7 +114,7 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
   @override
   AuthProviderType get type => AuthProviderType.oauth2;
 
-  /// Proxy providers cannot refresh tokens client-side — the backend holds
+  /// Proxy providers cannot refresh tokens client-side; the backend holds
   /// the refresh token. Set to `true` if you add a backend refresh endpoint
   /// and override [refreshToken].
   @override
@@ -144,32 +142,24 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
   /// elapses before the deep link arrives.
   @override
   Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
-    if (_pendingCallback != null && !_pendingCallback!.isCompleted) {
+    if (hasPendingRedirect) {
       logWarning('Cancelling previous pending OAuth callback for $id');
-      _pendingCallback!.completeError(
-        AuthenticationCancelledException(id),
-      );
     }
-    _pendingCallback = Completer<Uri>();
 
     try {
       logInfo('Starting backend OAuth flow for $id');
 
-      // Step 1: Ask the backend to initiate the OAuth flow.
-      final authUrl = await _initiateFlow(null);
-      logDebug('Authorization URL received for $id');
-
-      // Step 2: Open the URL in an external browser.
-      await _launchUrl(authUrl);
-      logDebug('Authorization URL launched for $id');
-
-      // Step 3: Wait for the deep-link callback from the backend.
-      final callbackUri = await _pendingCallback!.future.timeout(
-        config.timeout,
-        onTimeout: () {
-          logWarning('OAuth flow timed out for $id');
-          throw AuthenticationCancelledException(id);
+      // Steps 1-3: ask the backend for the authorization URL, open it in an
+      // external browser, and wait for the deep-link callback.
+      final callbackUri = await awaitRedirect(
+        launch: () async {
+          final authUrl = await _initiateFlow(null);
+          logDebug('Authorization URL received for $id');
+          await _launchUrl(authUrl);
+          logDebug('Authorization URL launched for $id');
         },
+        timeout: config.timeout,
+        buildCancelledError: () => AuthenticationCancelledException(id),
       );
       logDebug('Deep-link callback received for $id');
 
@@ -185,7 +175,7 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
         originalError: e,
       );
     } finally {
-      _pendingCallback = null;
+      cleanupRedirect();
     }
   }
 
@@ -197,14 +187,14 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
   Future<void> signOut({String? userId}) async {
     // Server-side session revocation is the backend's responsibility.
     // Override and call your backend's sign-out endpoint if needed.
-    logDebug('signOut called for $id — no-op (backend manages session)');
+    logDebug('signOut called for $id, no-op (backend manages session)');
   }
 
   // ---------------------------------------------------------------------------
   // Token refresh
   // ---------------------------------------------------------------------------
 
-  /// Returns `null` by default — proxy providers do not refresh tokens
+  /// Returns `null` by default. Proxy providers do not refresh tokens
   /// client-side.
   ///
   /// Override and POST to your backend's refresh endpoint to enable silent
@@ -230,13 +220,13 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
   /// });
   /// ```
   void handleDeepLink(Uri uri) {
-    if (_pendingCallback == null || _pendingCallback!.isCompleted) {
+    if (!hasPendingRedirect) {
       logWarning('Received deep link for $id but no pending OAuth request');
       return;
     }
 
     logDebug('Resolving OAuth deep link for $id: $uri');
-    _pendingCallback!.complete(uri);
+    resolveRedirect(uri);
   }
 
   // ---------------------------------------------------------------------------
@@ -344,6 +334,12 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
   }
 
   /// GETs [ProxyOAuthConfig.userInfoEndpoint] with `Authorization: Bearer token`.
+  ///
+  /// This path never learns whether `token` is an application session token
+  /// or an opaque backend credential meant for a further exchange; it is
+  /// only used here to fetch the profile. It is surfaced via
+  /// [AuthAccount.providerData], never [AuthSignInResult.accessToken], per
+  /// the credential vs. session-token rule documented on [AuthSignInResult].
   Future<AuthSignInResult> _fetchUserInfo(String token) async {
     final response = await _dio.get(
       config.userInfoEndpoint!,
@@ -353,10 +349,20 @@ class ProxyOAuthProvider with AuthyraLogging implements AuthProvider {
       }),
     );
 
-    final user = config.userExtractor(response.data as Map<String, dynamic>);
+    final userJson = response.data as Map<String, dynamic>;
+    final user = config.userExtractor(userJson);
     logInfo('User info fetched for $id: ${user.id}');
 
-    return AuthSignInResult(user: user, accessToken: token);
+    return AuthSignInResult(
+      user: user,
+      account: AuthAccount(
+        id: '${id}_${user.id}',
+        userId: user.id,
+        providerId: id,
+        providerAccountId: user.id,
+        providerData: {'token': token},
+      ),
+    );
   }
 
   /// POSTs `{ token }` to [ProxyOAuthConfig.callbackEndpoint] and returns the

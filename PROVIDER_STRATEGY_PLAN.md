@@ -8,7 +8,7 @@ What already matches the target architecture, no changes needed:
 
 - **Provider/session separation.** `AuthProvider` is stateless; `AuthyraClient` builds `AuthAccount`/`AuthSession` from the provider's result, never the other way around (`authyra_client.dart`, `signIn()`).
 - **Plugins vs callbacks.** `AuthyraPlugin` hooks are observers, they cannot block anything. `AuthCallbacks` is the only gate (allow/deny via `CallbackResult`). Keep this split; do not let plugins grow blocking semantics.
-- **Generic OAuth2 + prebuilt configs.** `OAuth2Provider` carries the protocol; `GoogleProvider`/`GitHubOAuth2Provider` only supply an `OAuth2Config` and a `userExtractor`. This is the right shape for adding more HTTP OAuth providers without new provider classes.
+- **Generic OAuth2 + prebuilt configs.** `OAuth2Provider` carries the protocol; `GoogleProvider`/`GitHubProvider` only supply an `OAuth2Config` and a `userExtractor`. This is the right shape for adding more HTTP OAuth providers without new provider classes.
 
 Debt found that needs fixing before/around the public release:
 
@@ -19,7 +19,7 @@ Debt found that needs fixing before/around the public release:
 - **No CI gate.** `.github/workflows/deploy-docs.yml` only builds and deploys the docs site. Nothing runs `dart analyze`, `dart format --set-exit-if-changed`, or `dart test` on push/PR, even though the melos scripts for all three already exist.
 - **`AuthCallbacks` and `AuthyraPlugin` have no test coverage.** Every other core module does (`authyra_client_test.dart`, `session_manager_test.dart`, `account_manager_test.dart`, `credentials_provider_test.dart`, `session_registry_test.dart`, `memory_storage_test.dart`).
 - **`ProxyOAuthProvider` has no test coverage** (`OAuth2Provider` and `GoogleProvider` do).
-- **`GitHubOAuth2Provider` requires a client secret embedded in the mobile app.** The doc comment already flags this as a security note; it needs to be a first-class warning, not a paragraph buried in dartdoc.
+- **`GitHubProvider` requires a client secret embedded in the mobile app.** The doc comment already flags this as a security note; it needs to be a first-class warning, not a paragraph buried in dartdoc.
 
 ## 2. Decision: one strategy per provider, no dual-mode providers
 
@@ -81,12 +81,12 @@ Not part of the MVP, revisit only once a real case demands it:
 
 ### Providers (`authyra_flutter`)
 
-- [ ] Factor the shared browser-OAuth mixin (3.2)
-- [ ] Fix callback routing by `state` (3.3)
+- [x] Factor the shared browser-OAuth mixin (3.2). Done as `PendingRedirectFlow` + `OAuthSecurityValues`, consumed by `OAuth2Provider` and `ProxyOAuthProvider`. Unit-tested (`pending_redirect_flow_test.dart`, `oauth_security_values_test.dart`).
+- [x] Fix callback routing by `state` (3.3). `OAuth2CallbackHandler` now routes by `state`, not scheme; `registerProvider`/`unregisterProvider` removed. Unit-tested (`oauth2_callback_handle_test.dart`), including the same-scheme collision case.
 - [ ] Remove `AppleProvider`; migrate its doc/example references to `authyra_apple`
 - [ ] Add test coverage for `ProxyOAuthProvider` (state handling, timeout, deep-link error/cancel paths)
 - [ ] Add test coverage for the new `state`-based callback routing (collision case included)
-- [ ] Elevate the `GitHubOAuth2Provider` client-secret warning to a prominent README/dartdoc callout: recommend `ProxyOAuthProvider` for production mobile apps instead of embedding the secret
+- [ ] Elevate the `GitHubProvider` client-secret warning to a prominent README/dartdoc callout: recommend `ProxyOAuthProvider` for production mobile apps instead of embedding the secret
 - [ ] Decide whether `authyra_flutter` flips from `publish_to: none` to a real publish for the MVP, or stays internal one more cycle
 
 ### New package `authyra_apple`
