@@ -11,6 +11,7 @@ dev_dependencies:
 workspace:
   - packages/authyra
   - packages/authyra_flutter
+  - packages/authyra_apple
 
 melos:
   command:

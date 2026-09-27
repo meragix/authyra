@@ -8,7 +8,8 @@ All notable changes to the `authyra_flutter` package are documented here.
 
 ### Removed
 
-- **Breaking:** `AuthProvider.type` (`AuthProviderType`) removed from `OAuth2Provider`, `ProxyOAuthProvider`, and `AppleProvider`, following its removal from the core `authyra` interface.
+- **Breaking:** `AppleProvider`, `AppleOAuthConfig`, and the internal `JwtUtils` (ES256 client-secret generation) removed. Sign in with Apple moves to the new `authyra_apple` package, built on the native `sign_in_with_apple` SDK rather than a browser-based OAuth2 flow. This is required by App Store Review Guideline 4.8 when another social login is offered on iOS, and it also means this package no longer needs `dart_jsonwebtoken` as a dependency.
+- **Breaking:** `AuthProvider.type` (`AuthProviderType`) removed from `OAuth2Provider` and `ProxyOAuthProvider`, following its removal from the core `authyra` interface.
 
 ### Changed
 

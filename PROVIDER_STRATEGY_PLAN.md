@@ -83,7 +83,7 @@ Not part of the MVP, revisit only once a real case demands it:
 
 - [x] Factor the shared browser-OAuth mixin (3.2). Done as `PendingRedirectFlow` + `OAuthSecurityValues`, consumed by `OAuth2Provider` and `ProxyOAuthProvider`. Unit-tested (`pending_redirect_flow_test.dart`, `oauth_security_values_test.dart`).
 - [x] Fix callback routing by `state` (3.3). `OAuth2CallbackHandler` now routes by `state`, not scheme; `registerProvider`/`unregisterProvider` removed. Unit-tested (`oauth2_callback_handle_test.dart`), including the same-scheme collision case.
-- [ ] Remove `AppleProvider`; migrate its doc/example references to `authyra_apple`
+- [x] Remove `AppleProvider`; migrate its doc/example references to `authyra_apple`. Also removed the now-unused `dart_jsonwebtoken` dependency and the ES256-client-secret `JwtUtils` that only served the old provider.
 - [ ] Add test coverage for `ProxyOAuthProvider` (state handling, timeout, deep-link error/cancel paths)
 - [ ] Add test coverage for the new `state`-based callback routing (collision case included)
 - [ ] Elevate the `GitHubProvider` client-secret warning to a prominent README/dartdoc callout: recommend `ProxyOAuthProvider` for production mobile apps instead of embedding the secret
@@ -91,10 +91,10 @@ Not part of the MVP, revisit only once a real case demands it:
 
 ### New package `authyra_apple`
 
-- [ ] Scaffold under `packages/authyra_apple` following the existing package conventions (`analysis_options.yaml`, melos workspace entry)
-- [ ] `AppleProvider` built on `sign_in_with_apple`, implementing `AuthProvider`
-- [ ] Tests (mock the native call surface where possible)
-- [ ] README covering entitlements/capabilities setup for iOS, Android, and web
+- [x] Scaffold under `packages/authyra_apple` following the existing package conventions (`analysis_options.yaml`, melos workspace entry)
+- [x] `AppleProvider` built on `sign_in_with_apple`, implementing `AuthProvider`. Ships two constructors: identity-only (raw credential in `AuthAccount.providerData`) and `.withExchange` (forwards the credential to a backend, returns real session tokens), mirroring the `CredentialsProvider`/`CredentialsProvider.withTokens` pattern.
+- [x] Tests (mock the native call surface where possible). 11 tests against a fake `SignInWithApplePlatform`, covering identity-only, `.withExchange`, JWT-fallback decoding, and error mapping (cancellation, authorization failure, not-supported).
+- [x] README covering entitlements/capabilities setup for iOS, Android, and web
 
 ### Security
 
@@ -110,7 +110,7 @@ Not part of the MVP, revisit only once a real case demands it:
 
 - [ ] Update `docs/content/3.providers` to reflect the final one-strategy-per-provider decision and the `authyra_apple` package
 - [ ] Root and per-package README quick-start covering: one `CredentialsProvider` example, one HTTP `OAuth2Provider` example (Google or GitHub), one `authyra_apple` example
-- [ ] Changelog entries for the `AppleProvider` removal and the `authyra_apple` introduction, framed as a breaking change
+- [x] Changelog entries for the `AppleProvider` removal and the `authyra_apple` introduction, framed as a breaking change
 
 ### Release mechanics
 

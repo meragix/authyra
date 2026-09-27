@@ -1,13 +1,12 @@
-name: authyra_flutter
+name: authyra_apple
 description: >-
-  The Flutter integration for Authyra. Provides secure storage, 
-  reactive UI components, and official OAuth/Credentials provider
+  Native Sign in with Apple provider for Authyra, built on sign_in_with_apple.
 version: 0.1.0
-publish_to: none
 homepage: https://meragix.github.io/authyra
 repository: https://github.com/meragix/authyra
 issue_tracker: https://github.com/meragix/authyra/issues
 documentation: https://meragix.github.io/authyra
+publish_to: none
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -20,22 +19,19 @@ dependencies:
     sdk: flutter
   authyra:
     path: ../authyra
-  dio: ^5.9.1
-  crypto: ^3.0.7
-  url_launcher: ^6.3.2
-  flutter_secure_storage: ^9.2.2
+  sign_in_with_apple: ^6.1.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  sign_in_with_apple_platform_interface: ^1.1.0
 
 topics:
   - auth
+  - apple
+  - sign-in-with-apple
   - session
-  - oauth
-  - jwt
-  - security
 
 # The following section is specific to Flutter packages.
 flutter:

@@ -3,7 +3,7 @@
 [![pub.dev](https://img.shields.io/pub/v/authyra_flutter.svg)](https://pub.dev/packages/authyra_flutter)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/meragix/authyra/blob/main/LICENSE)
 
-Flutter layer for [authyra](https://pub.dev/packages/authyra). Adds OAuth2 providers (Google, GitHub, Apple), `SecureAuthStorage`, and a `AuthGuard` widget on top of the core framework. Re-exports the entire `authyra` package: one import, everything included.
+Flutter layer for [authyra](https://pub.dev/packages/authyra). Adds OAuth2 providers (Google, GitHub, generic), `SecureAuthStorage`, and a `AuthGuard` widget on top of the core framework. Re-exports the entire `authyra` package: one import, everything included. For Sign in with Apple, see [`authyra_apple`](../authyra_apple) instead.
 
 ---
 
@@ -86,16 +86,7 @@ Both `GoogleProvider` and `GitHubProvider` extend `OAuth2Provider`, so a single 
 
 ### Apple
 
-```dart
-final appleProvider = AppleProvider(
-  clientId: 'com.example.myapp',
-  redirectUri: 'https://example.com/auth/apple/callback',
-);
-
-await Authyra.instance.signIn('apple');
-```
-
-`AppleProvider` manages its own pending flow directly; it is not routed through `OAuth2CallbackHandler`. Wire its deep link separately (see [Deep-link setup](#deep-link-setup)).
+Sign in with Apple lives in a separate package, [`authyra_apple`](../authyra_apple), built on the native `sign_in_with_apple` SDK rather than a browser-based OAuth2 flow (required by App Store Review Guideline 4.8 when another social login is offered on iOS). See that package's README for setup and usage.
 
 ### Any OAuth2 provider
 
@@ -216,16 +207,17 @@ AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback);
 
 Routing is keyed by the CSRF `state` each sign-in attempt generates, not by URI scheme, so two providers can safely share the same redirect scheme (e.g. `myapp://auth/callback` for both GitHub and a custom Discord provider).
 
-`AppleProvider` and `ProxyOAuthProvider` manage their own pending flow directly and are not routed through `OAuth2CallbackHandler`; wire their deep link explicitly instead:
+`ProxyOAuthProvider` manages its own pending flow directly and is not routed through `OAuth2CallbackHandler`; wire its deep link explicitly instead:
 
 ```dart
 AppLinks().uriLinkStream.listen((uri) {
-  appleProvider.handleRedirectCallback(uri);
   if (uri.toString().startsWith('myapp://auth/callback')) {
     googleProxy.handleDeepLink(uri);
   }
 });
 ```
+
+`authyra_apple`'s `AppleProvider` needs no deep-link wiring at all; the native SDK resolves the sign-in directly.
 
 ---
 
