@@ -104,7 +104,7 @@ Not part of the MVP, revisit only once a real case demands it:
 
 ### CI
 
-- [ ] Add a GitHub Actions workflow running `melos run analyze`, `melos run format:check`, and `melos run test` on push and pull request. This is currently missing entirely; `deploy-docs.yml` only covers the docs site.
+- [x] Add a GitHub Actions workflow running `melos run analyze`, `melos run format:check`, and `melos run test` on push and pull request. Added `.github/workflows/ci.yml`. Along the way, fixed two things that would have made the very first run red: pre-existing format debt unrelated to this work, and a broken `test` script that ran `dart test` uniformly across Flutter packages (they need `flutter test`); see the `chore:` commit right before this one.
 
 ### Documentation
 
