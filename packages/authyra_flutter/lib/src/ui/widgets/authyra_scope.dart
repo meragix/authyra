@@ -2,10 +2,10 @@ import 'package:authyra/authyra.dart';
 import 'package:flutter/widgets.dart';
 
 /// InheritedWidget that propagates Authyra state throughout the widget tree
-/// 
+///
 /// Wrap your app with this widget to enable [BuildContext] extensions
 /// and automatic rebuilding when authentication state changes.
-/// 
+///
 /// Example:
 /// ```dart
 /// MaterialApp(
@@ -24,7 +24,8 @@ class AuthyraScope extends StatefulWidget {
   State<AuthyraScope> createState() => _AuthyraScopeState();
 
   static Authyra of(BuildContext context) {
-    final inherited = context.dependOnInheritedWidgetOfExactType<_InheritedAuthyra>();
+    final inherited =
+        context.dependOnInheritedWidgetOfExactType<_InheritedAuthyra>();
     if (inherited == null) {
       throw StateError(
         'No AuthyraScope found in context. '
@@ -35,7 +36,8 @@ class AuthyraScope extends StatefulWidget {
   }
 
   static Authyra? maybeOf(BuildContext context) {
-    final inherited = context.dependOnInheritedWidgetOfExactType<_InheritedAuthyra>();
+    final inherited =
+        context.dependOnInheritedWidgetOfExactType<_InheritedAuthyra>();
     return inherited?.authyra;
   }
 }

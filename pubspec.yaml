@@ -38,15 +38,21 @@ melos:
       run: melos exec -- dart format --output=none --set-exit-if-changed .
 
     # Testing
+    # `dart test` cannot run Flutter packages (authyra_flutter, authyra_apple):
+    # it lacks the Flutter engine/bindings their tests depend on, so the two
+    # families are split and run with the tool each actually needs.
     test:
       description: Run all tests
-      run: melos exec --fail-fast -- dart test --coverage=coverage
+      run: |
+        melos exec --fail-fast --no-flutter -- dart test
+        melos exec --fail-fast --flutter -- flutter test
 
     test:coverage:
       description: Generate coverage report
       run: |
-        melos exec -- dart test --coverage=coverage
-        melos exec -- dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+        melos exec --no-flutter -- dart test --coverage=coverage
+        melos exec --no-flutter -- dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+        melos exec --flutter -- flutter test --coverage
 
     # Publishing
     publish:check:

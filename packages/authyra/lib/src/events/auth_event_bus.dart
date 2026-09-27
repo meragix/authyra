@@ -92,7 +92,8 @@ class AuthEventBus with AuthyraLogging {
         try {
           (listener as dynamic)(event);
         } catch (e, stackTrace) {
-          logError('Error in event listener for ${event.runtimeType}', e, stackTrace);
+          logError('Error in event listener for ${event.runtimeType}', e,
+              stackTrace);
         }
       }
     }

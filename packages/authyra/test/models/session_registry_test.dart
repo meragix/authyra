@@ -73,7 +73,8 @@ void main() {
         expect(r.accountCount, 1);
       });
 
-      test('second session added with setAsActive=false leaves first active', () {
+      test('second session added with setAsActive=false leaves first active',
+          () {
         final r = const SessionRegistry()
             .addSession(_session('alice'))
             .addSession(_session('bob'), setAsActive: false);
@@ -120,12 +121,11 @@ void main() {
 
       test('removing active session auto-elects next most recent', () {
         final now = DateTime.now();
-        final alice = _sessionAt('alice', now.subtract(const Duration(minutes: 5)));
+        final alice =
+            _sessionAt('alice', now.subtract(const Duration(minutes: 5)));
         final bob = _sessionAt('bob', now);
 
-        final r = const SessionRegistry()
-            .addSession(alice)
-            .addSession(bob);
+        final r = const SessionRegistry().addSession(alice).addSession(bob);
         // bob is active (most recently used)
         final r2 = r.removeSession('bob');
         expect(r2.activeUserId, 'alice');
@@ -232,7 +232,8 @@ void main() {
     group('allSessions / allUsers', () {
       test('sorted by lastUsedAt descending', () {
         final now = DateTime.now();
-        final alice = _sessionAt('alice', now.subtract(const Duration(minutes: 10)));
+        final alice =
+            _sessionAt('alice', now.subtract(const Duration(minutes: 10)));
         final bob = _sessionAt('bob', now);
 
         final r = const SessionRegistry()
@@ -270,7 +271,9 @@ void main() {
         expect(r1, equals(r2));
       });
 
-      test('registry with one session has correct account count and active user', () {
+      test(
+          'registry with one session has correct account count and active user',
+          () {
         final s = _session('alice');
         final r = const SessionRegistry().addSession(s);
         expect(r.accountCount, 1);
@@ -291,4 +294,3 @@ void main() {
     });
   });
 }
-

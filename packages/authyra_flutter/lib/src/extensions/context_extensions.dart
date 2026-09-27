@@ -4,9 +4,8 @@ import 'package:flutter/widgets.dart';
 
 extension AuthyraContextExtensions on BuildContext {
   Authyra get auth => AuthyraScope.of(this);
-  
+
   Future<AuthSession?> get activeSession => auth.getSession();
 
   bool get isAuthenticated => auth.isAuthenticated;
 }
-

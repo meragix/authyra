@@ -106,6 +106,8 @@ class _AuthyraRouterState extends State<AuthyraRouter> {
           );
     }
 
-    return _isAuthenticated ? widget.authenticatedBuilder(context) : widget.unauthenticatedBuilder(context);
+    return _isAuthenticated
+        ? widget.authenticatedBuilder(context)
+        : widget.unauthenticatedBuilder(context);
   }
 }

@@ -389,8 +389,7 @@ class AuthSession extends Equatable {
       activeAccountId: activeAccountId,
       linkedAccounts: linkedAccounts,
       metadata: json['metadata'] != null
-          ? SessionMetadata.fromJson(
-              json['metadata'] as Map<String, dynamic>)
+          ? SessionMetadata.fromJson(json['metadata'] as Map<String, dynamic>)
           : null,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
@@ -416,7 +415,6 @@ class AuthSession extends Equatable {
       ];
 
   @override
-  String toString() =>
-      'AuthSession(userId: ${user.id}, provider: $providerId, '
+  String toString() => 'AuthSession(userId: ${user.id}, provider: $providerId, '
       'expired: $isExpired, linkedAccounts: ${linkedAccounts.length})';
 }

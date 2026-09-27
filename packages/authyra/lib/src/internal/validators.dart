@@ -53,7 +53,8 @@ class AuthValidators {
       return false;
     }
 
-    if (requireSpecialChar && !password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+    if (requireSpecialChar &&
+        !password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
       return false;
     }
 
@@ -97,7 +98,8 @@ class AuthValidators {
       );
     }
 
-    if (requireSpecialChar && !password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+    if (requireSpecialChar &&
+        !password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
       throw InvalidPasswordException(
         'Password must contain at least one special character',
       );
@@ -212,7 +214,8 @@ class AuthValidators {
   }
 
   /// Validate provider configuration
-  static void validateProviderConfig(String providerName, Map<String, dynamic> config) {
+  static void validateProviderConfig(
+      String providerName, Map<String, dynamic> config) {
     switch (providerName.toLowerCase()) {
       case 'google':
         _validateGoogleConfig(config);
@@ -236,7 +239,8 @@ class AuthValidators {
 
     final clientId = config['clientId'] as String;
     if (clientId.isEmpty) {
-      throw InvalidProviderConfigException('google', 'clientId cannot be empty');
+      throw InvalidProviderConfigException(
+          'google', 'clientId cannot be empty');
     }
   }
 
@@ -262,7 +266,9 @@ class AuthValidators {
 
     // Validate redirect URI format
     final redirectUri = config['redirectUri'] as String;
-    if (!redirectUri.startsWith('http://') && !redirectUri.startsWith('https://') && !redirectUri.contains('://')) {
+    if (!redirectUri.startsWith('http://') &&
+        !redirectUri.startsWith('https://') &&
+        !redirectUri.contains('://')) {
       throw InvalidProviderConfigException(
         'github',
         'redirectUri must be a valid URL or custom scheme',
@@ -271,7 +277,8 @@ class AuthValidators {
   }
 
   static void _validateCredentialsConfig(Map<String, dynamic> config) {
-    if (!config.containsKey('loginEndpoint') || config['loginEndpoint'] == null) {
+    if (!config.containsKey('loginEndpoint') ||
+        config['loginEndpoint'] == null) {
       throw InvalidProviderConfigException(
         'credentials',
         'loginEndpoint is required',
@@ -288,7 +295,8 @@ class AuthValidators {
     }
 
     // Validate deep link scheme if provided
-    if (config.containsKey('deepLinkScheme') && config['deepLinkScheme'] != null) {
+    if (config.containsKey('deepLinkScheme') &&
+        config['deepLinkScheme'] != null) {
       final scheme = config['deepLinkScheme'] as String;
       if (scheme.isEmpty) {
         throw InvalidConfigurationException('deepLinkScheme cannot be empty');
@@ -346,7 +354,8 @@ class AuthValidators {
     // Validate access token
     final accessToken = sessionData['accessToken'] as String;
     if (accessToken.isEmpty) {
-      throw ValidationException('session.accessToken', 'Access token cannot be empty');
+      throw ValidationException(
+          'session.accessToken', 'Access token cannot be empty');
     }
 
     // Validate expiration date
