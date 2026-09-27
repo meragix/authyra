@@ -159,6 +159,20 @@ class TokenRefreshFailedException extends AuthException {
         );
 }
 
+/// Thrown by a `RefreshProvider` to signal that a token refresh must not be
+/// retried: the provider does not support refresh, no refresh token is
+/// available, or a callback denied the attempt.
+///
+/// Distinct from a `RefreshProvider` simply returning `null`, which
+/// `TokenRefresher` still treats as a transient failure worth retrying.
+class RefreshDeniedException extends AuthException {
+  RefreshDeniedException([String? reason])
+      : super(
+          'Token refresh denied${reason != null ? ': $reason' : ''}',
+          code: 'REFRESH_DENIED',
+        );
+}
+
 /// Thrown when a token is invalid or malformed.
 class InvalidTokenException extends AuthException {
   InvalidTokenException([String? details])

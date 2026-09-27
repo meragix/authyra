@@ -1,16 +1,22 @@
 import 'dart:async';
 
+import 'package:authyra/src/exceptions/auth_exceptions.dart';
 import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_token_result.dart';
 
 /// Provides fresh [AuthTokenResult] for [session].
 ///
-/// Return `null` when the provider does not support refresh, the refresh
-/// token is invalid or expired, or the session has no refresh token.
-/// The refresher will treat a `null` return as a retryable failure and
-/// exhaust [TokenRefresher.maxRetries] before expiring the session.
-typedef RefreshProvider = Future<AuthTokenResult?> Function(AuthSession session);
+/// Return `null` when the refresh token was rejected by the server (invalid
+/// or expired); the refresher treats this as a transient failure and retries
+/// up to [TokenRefresher.maxRetries] times before expiring the session.
+///
+/// Throw [RefreshDeniedException] when the refresh must not be retried at
+/// all: the provider does not support refresh, the session has no refresh
+/// token, or a callback denied the attempt. The refresher expires the
+/// session immediately in that case, skipping the retry loop.
+typedef RefreshProvider = Future<AuthTokenResult?> Function(
+    AuthSession session);
 
 /// Proactive token-refresh scheduler with linear retry and back-off.
 ///
@@ -98,8 +104,10 @@ class TokenRefresher with AuthyraLogging {
   /// Calling [start] while already running is a no-op.
   void start({
     required AuthSession? Function() getSession,
-    required Future<void> Function(String userId, AuthSession updated) onRefreshed,
-    required Future<void> Function(AuthSession session, String? error) onExpired,
+    required Future<void> Function(String userId, AuthSession updated)
+        onRefreshed,
+    required Future<void> Function(AuthSession session, String? error)
+        onExpired,
   }) {
     if (_running) return;
     _running = true;
@@ -193,6 +201,11 @@ class TokenRefresher with AuthyraLogging {
           'Refresh returned null for user: ${session.user.id} '
           '(attempt $attempt/$totalAttempts)',
         );
+      } on RefreshDeniedException catch (e) {
+        logWarning(
+          'Refresh denied for user: ${session.user.id}, not retrying: ${e.message}',
+        );
+        return null;
       } catch (e, stackTrace) {
         logError(
           'Refresh error for user: ${session.user.id} '

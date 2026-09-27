@@ -31,6 +31,10 @@ All notable changes to the `authyra` package are documented here.
 
 - `AuthEventBus.on<T>()`: switched to `List<Function>` with dynamic dispatch to fix Dart contravariance cast error.
 - `getSession()` reads `activeSession` directly (bypassing expiry guard) before handing off to auto-refresh logic.
+- `SessionManager` no longer persists the whole `SessionRegistry` as a single JSON blob. Each account is now stored under its own `session:{userId}` key (using the previously unused `AuthStorage.getKeysWithPrefix`), so refreshing or removing one account no longer rewrites every other account's tokens. Existing installs migrate the legacy blob automatically on first load.
+- `AuthCallbacks.onBeforeAccountSwitch`, `onBeforeTokenRefresh`, and `onBeforeAccountRemove` were defined but never invoked. They are now called from `AccountManager.switchTo()` / `signOut()` and from the token-refresh path, so overriding them actually gates the corresponding operation.
+- `AccountSwitchEvent` and `AccountRemovedEvent` were documented in the event catalogue but never emitted. `AccountManager` now emits both at the appropriate point.
+- `TokenRefresher` retried a denied or unsupported refresh up to `maxRetries` times with `retryDelay` between attempts before expiring the session, even though retrying could never succeed (no refresh token, provider doesn't support refresh, callback denial). A `RefreshProvider` can now throw `RefreshDeniedException` to signal a non-retryable refresh; `TokenRefresher` expires the session immediately instead of wasting the retry budget. `AuthyraClient`'s internal refresh provider now does this for all three permanent cases.
 
 ## [0.1.0] - 2026-02-23
 

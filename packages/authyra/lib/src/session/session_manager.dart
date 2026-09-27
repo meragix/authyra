@@ -62,8 +62,17 @@ class SessionManager with AuthyraLogging {
   /// refresh. Actual token renewal is delegated to the provider layer.
   final bool autoRefresh;
 
-  /// Storage key under which the serialised [SessionRegistry] is persisted.
-  static const String _registryKey = 'authyra_session_registry';
+  /// Legacy storage key under which the whole [SessionRegistry] used to be
+  /// persisted as a single JSON blob. Only read once, during migration.
+  static const String _legacyRegistryKey = 'authyra_session_registry';
+
+  /// Storage key prefix under which each account's [AuthSession] is persisted
+  /// individually, as `'$_sessionKeyPrefix{userId}'`.
+  static const String _sessionKeyPrefix = 'session:';
+
+  /// Storage key holding registry-wide metadata (`activeUserId`, `lastUpdated`)
+  /// that doesn't belong to any single account.
+  static const String _indexKey = 'authyra_session_index';
 
   /// Broadcast stream controller for active session changes.
   final _sessionController = StreamController<AuthSession?>.broadcast();
@@ -561,36 +570,124 @@ class SessionManager with AuthyraLogging {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /// Deserialises the registry from [storage] into [_registry].
+  /// Rebuilds [_registry] from one storage entry per account plus the index.
+  ///
+  /// Each account is persisted under its own `'session:{userId}'` key so that
+  /// a mutation to one account never rewrites another account's tokens. A
+  /// single corrupted account entry is skipped and logged rather than
+  /// discarding the whole registry.
+  ///
+  /// Falls back to migrating the legacy single-blob format
+  /// (`authyra_session_registry`) the first time this runs against storage
+  /// written by a pre-migration version of Authyra.
   Future<void> _loadRegistry() async {
-    try {
-      final data = await storage.read(_registryKey);
+    final keys = await storage.getKeysWithPrefix(_sessionKeyPrefix);
 
-      if (data == null || data.isEmpty) {
-        logDebug('No persisted registry found — starting with empty state');
-        _registry = const SessionRegistry();
-        return;
+    if (keys.isEmpty) {
+      await _migrateLegacyBlobIfPresent();
+      return;
+    }
+
+    final sessions = <String, AuthSession>{};
+    for (final key in keys) {
+      try {
+        final raw = await storage.read(key);
+        if (raw == null || raw.isEmpty) continue;
+        final session =
+            AuthSession.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        sessions[session.user.id] = session;
+      } on FormatException catch (e, stackTrace) {
+        logError('Corrupted session entry at "$key", skipping', e, stackTrace);
       }
+    }
 
-      final json = jsonDecode(data) as Map<String, dynamic>;
-      _registry = SessionRegistry.fromJson(json);
+    String? activeUserId;
+    DateTime? lastUpdated;
+    final indexRaw = await storage.read(_indexKey);
+    if (indexRaw != null && indexRaw.isNotEmpty) {
+      try {
+        final index = jsonDecode(indexRaw) as Map<String, dynamic>;
+        activeUserId = index['activeUserId'] as String?;
+        lastUpdated = index['lastUpdated'] != null
+            ? DateTime.parse(index['lastUpdated'] as String)
+            : null;
+      } on FormatException catch (e, stackTrace) {
+        logError(
+            'Corrupted session index, active account unknown', e, stackTrace);
+      }
+    }
 
-      logDebug('Registry loaded: ${_registry.accountCount} account(s)');
-    } on FormatException catch (e, stackTrace) {
-      // Corrupted data — reset to a clean state rather than hard-failing.
-      logError(
-          'Registry JSON corrupted — resetting to empty state', e, stackTrace);
+    // Guard against a dangling activeUserId left over after a corrupted or
+    // manually edited account entry.
+    if (activeUserId != null && !sessions.containsKey(activeUserId)) {
+      activeUserId = null;
+    }
+
+    _registry = SessionRegistry(
+      sessions: sessions,
+      activeUserId: activeUserId,
+      lastUpdated: lastUpdated,
+    );
+    logDebug('Registry loaded: ${_registry.accountCount} account(s)');
+  }
+
+  /// One-time migration from the pre-existing monolithic registry blob to
+  /// per-account keys. No-op (empty registry) when no legacy blob exists.
+  Future<void> _migrateLegacyBlobIfPresent() async {
+    final legacy = await storage.read(_legacyRegistryKey);
+    if (legacy == null || legacy.isEmpty) {
+      logDebug('No persisted registry found, starting with empty state');
       _registry = const SessionRegistry();
-      await storage.delete(_registryKey);
+      return;
+    }
+
+    try {
+      logInfo(
+          'Migrating legacy monolithic session registry to per-account keys');
+      final migrated = SessionRegistry.fromJson(
+        jsonDecode(legacy) as Map<String, dynamic>,
+      );
+      _registry = const SessionRegistry();
+      await _saveRegistry(migrated);
+      await storage.delete(_legacyRegistryKey);
+    } on FormatException catch (e, stackTrace) {
+      logError('Legacy registry JSON corrupted, resetting to empty state', e,
+          stackTrace);
+      _registry = const SessionRegistry();
+      await storage.delete(_legacyRegistryKey);
     }
   }
 
-  /// Serialises [registry] to [storage] and updates the in-memory state.
+  /// Persists only the accounts that changed since [_registry], updates the
+  /// index, and updates the in-memory state.
+  ///
+  /// Writing per-account keys instead of the whole registry means refreshing
+  /// or removing one account never touches another account's stored tokens.
   Future<void> _saveRegistry(SessionRegistry registry) async {
+    final previous = _registry;
+    _registry = registry;
     try {
-      _registry = registry;
-      final json = jsonEncode(registry.toJson());
-      await storage.write(_registryKey, json);
+      for (final entry in registry.sessions.entries) {
+        if (previous.sessions[entry.key] == entry.value) continue;
+        await storage.write(
+          '$_sessionKeyPrefix${entry.key}',
+          jsonEncode(entry.value.toJson()),
+        );
+      }
+
+      for (final userId in previous.sessions.keys) {
+        if (!registry.sessions.containsKey(userId)) {
+          await storage.delete('$_sessionKeyPrefix$userId');
+        }
+      }
+
+      await storage.write(
+        _indexKey,
+        jsonEncode({
+          'activeUserId': registry.activeUserId,
+          'lastUpdated': registry.lastUpdated?.toIso8601String(),
+        }),
+      );
 
       logDebug('Registry persisted: ${registry.accountCount} account(s)');
     } catch (e, stackTrace) {

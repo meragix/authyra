@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:authyra/src/models/auth_sign_in_result.dart';
 import 'package:authyra/src/models/auth_token_result.dart';
 import 'package:test/test.dart';
+import 'package:authyra/src/callbacks/auth_callbacks.dart';
+import 'package:authyra/src/callbacks/callback_result.dart';
 import 'package:authyra/src/client/authyra_client.dart';
 import 'package:authyra/src/interfaces/auth_provider.dart';
 import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
@@ -113,6 +115,16 @@ class _SignOutProvider implements AuthProvider {
   Future<AuthTokenResult?> refreshToken(String token) async => null;
 }
 
+class _DenyRefreshCallbacks extends AuthCallbacks {
+  @override
+  Future<CallbackResult> onBeforeTokenRefresh(
+    AuthUser user,
+    String refreshToken,
+  ) async {
+    return const CallbackResult.deny('refresh denied');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -120,11 +132,13 @@ class _SignOutProvider implements AuthProvider {
 AuthyraClient _client(
   AuthProvider provider, {
   AuthConfig config = const AuthConfig(),
+  AuthCallbacks? callbacks,
 }) {
   return AuthyraClient(
     providers: [provider],
     storage: InMemoryStorage(),
     config: config,
+    callbacks: callbacks,
   );
 }
 
@@ -148,7 +162,8 @@ void main() {
         await client.dispose();
       });
 
-      test('duplicate provider id throws ProviderAlreadyRegisteredException', () {
+      test('duplicate provider id throws ProviderAlreadyRegisteredException',
+          () {
         final p1 = _FakeProvider(returnUser: AuthUser(id: 'u1'));
         expect(
           () => AuthyraClient(
@@ -201,7 +216,8 @@ void main() {
         );
       });
 
-      test('provider returning null throws AuthenticationFailedException', () async {
+      test('provider returning null throws AuthenticationFailedException',
+          () async {
         final p = _FakeProvider(returnUser: null);
         final c = _client(p);
         await c.initialize();
@@ -213,7 +229,8 @@ void main() {
       });
 
       test('provider exception is wrapped in AuthException', () async {
-        final p = _FakeProvider(returnUser: AuthUser(id: 'x'), throwOnSignIn: true);
+        final p =
+            _FakeProvider(returnUser: AuthUser(id: 'x'), throwOnSignIn: true);
         final c = _client(p);
         await c.initialize();
         expect(() => c.signIn('fake'), throwsA(isA<AuthException>()));
@@ -370,6 +387,33 @@ void main() {
         expect(captured!.success, isTrue);
         await client.dispose();
       });
+
+      test(
+          'onBeforeTokenRefresh denial expires the session instead of refreshing',
+          () async {
+        final now = DateTime.now();
+        final provider = _FakeProvider(
+          returnUser: AuthUser(id: 'usr_1'),
+          returnAccessToken: 'at',
+          returnRefreshToken: 'rt',
+          returnExpiresAt: now.add(const Duration(hours: 1)),
+        );
+        final callbacks = _DenyRefreshCallbacks();
+        final client = _client(provider, callbacks: callbacks);
+        await client.initialize();
+        await client.signIn('fake');
+
+        final stopwatch = Stopwatch()..start();
+        final success = await client.refreshSession();
+        stopwatch.stop();
+
+        expect(success, isFalse);
+        expect(provider.refreshCallCount, 0);
+        // A denial is not retried; without the fix this would take ~10s
+        // (TokenRefresher's default 2 retries x 5s retryDelay).
+        expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
+        await client.dispose();
+      });
     });
 
     group('auto-refresh via getSession', () {
@@ -396,7 +440,9 @@ void main() {
         await client.dispose();
       });
 
-      test('returns null and emits SessionExpiredEvent when refresh unsupported', () async {
+      test(
+          'returns null and emits SessionExpiredEvent when refresh unsupported',
+          () async {
         final now = DateTime.now();
         // Provider with no refresh token — supportsRefresh is false
         final provider = _FakeProvider(
@@ -415,10 +461,14 @@ void main() {
 
         SessionExpiredEvent? expiredEvent;
         client.events.on<SessionExpiredEvent>((e) => expiredEvent = e);
+        final stopwatch = Stopwatch()..start();
         final session = await client.getSession();
+        stopwatch.stop();
 
         expect(session, isNull);
         expect(expiredEvent, isNotNull);
+        // An unsupported refresh is not retried either.
+        expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
         await client.dispose();
       });
 
@@ -477,8 +527,8 @@ void main() {
 
         await client1.signIn('fake');
 
-        expect(captured1, isNotNull);  // client1 received the event
-        expect(captured2, isNull);     // client2 did NOT receive it
+        expect(captured1, isNotNull); // client1 received the event
+        expect(captured2, isNull); // client2 did NOT receive it
 
         await client1.dispose();
         await client2.dispose();

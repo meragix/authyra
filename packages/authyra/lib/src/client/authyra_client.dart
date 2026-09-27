@@ -139,7 +139,7 @@ class AuthyraClient with AuthyraLogging {
     AuthCallbacks? callbacks,
     this.config = const AuthConfig(),
     List<AuthyraPlugin>? plugins,
-  })  : plugins = List.unmodifiable(plugins ?? const []) {
+  }) : plugins = List.unmodifiable(plugins ?? const []) {
     for (final provider in providers) {
       if (_providerMap.containsKey(provider.id)) {
         throw ProviderAlreadyRegisteredException(provider.id);
@@ -153,8 +153,27 @@ class AuthyraClient with AuthyraLogging {
       refreshThreshold: config.refreshThreshold,
       refreshProvider: (session) async {
         final provider = _providerMap[session.providerId];
-        if (provider == null || !provider.supportsRefresh || !session.canRefresh) {
-          return null;
+        if (provider == null ||
+            !provider.supportsRefresh ||
+            !session.canRefresh) {
+          throw RefreshDeniedException(
+            'provider "${session.providerId}" does not support refresh or '
+            'has no refresh token',
+          );
+        }
+        if (_callbacks != null) {
+          final result = await _callbacks!.onBeforeTokenRefresh(
+            session.user,
+            session.refreshToken!,
+          );
+          if (result.isDenied) {
+            logWarning(
+              'Token refresh denied by callback for user: ${session.user.id}',
+            );
+            throw RefreshDeniedException(
+              result.errorMessage ?? 'denied by callback',
+            );
+          }
         }
         return provider.refreshToken(session.refreshToken!);
       },
@@ -369,7 +388,8 @@ class AuthyraClient with AuthyraLogging {
             providerAccountId: user.id,
             accessToken: result.accessToken,
             refreshToken: result.refreshToken,
-            tokenExpiresAt: result.expiresAt ?? now.add(config.tokenLifetimeDuration),
+            tokenExpiresAt:
+                result.expiresAt ?? now.add(config.tokenLifetimeDuration),
           );
 
       final session = AuthSession(
@@ -478,10 +498,9 @@ class AuthyraClient with AuthyraLogging {
       ));
 
       final next = _sessionManager.activeSession;
-      _emitAuthState(
-          next != null
-              ? AuthState.authenticated(next.user)
-              : AuthState.unauthenticated());
+      _emitAuthState(next != null
+          ? AuthState.authenticated(next.user)
+          : AuthState.unauthenticated());
     } catch (e, stackTrace) {
       logError('Sign out failed', e, stackTrace);
       throw AuthyraErrorHandler.handleError(e, stackTrace);
@@ -621,6 +640,8 @@ class AuthyraClient with AuthyraLogging {
     return _accountManager ??= AccountManager(
       sessionManager: _sessionManager,
       onStateChange: _emitAuthState,
+      callbacks: _callbacks,
+      eventBus: _eventBus,
     );
   }
 

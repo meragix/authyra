@@ -1,3 +1,6 @@
+import 'package:authyra/src/callbacks/auth_callbacks.dart';
+import 'package:authyra/src/events/auth_event_bus.dart';
+import 'package:authyra/src/events/auth_events.dart';
 import 'package:authyra/src/exceptions/auth_exceptions.dart';
 import 'package:authyra/src/internal/logger.dart';
 import 'package:authyra/src/session/session_manager.dart';
@@ -48,12 +51,26 @@ class AccountManager with AuthyraLogging {
   /// `AuthyraInstance`.
   final void Function(AuthState) onStateChange;
 
+  /// Optional middleware gating account-switch and account-removal.
+  ///
+  /// Wired up by [AuthyraClient] from its own [AuthCallbacks] so that
+  /// [AuthCallbacks.onBeforeAccountSwitch] and
+  /// [AuthCallbacks.onBeforeAccountRemove] are honoured here too, not just
+  /// during sign-in/sign-out.
+  final AuthCallbacks? callbacks;
+
+  /// Optional event bus used to emit [AccountSwitchEvent] and
+  /// [AccountRemovedEvent]. `null` in contexts that don't need eventing.
+  final AuthEventBus? eventBus;
+
   /// Creates an [AccountManager].
   ///
   /// Both [sessionManager] and [onStateChange] are required.
   AccountManager({
     required this.sessionManager,
     required this.onStateChange,
+    this.callbacks,
+    this.eventBus,
   });
 
   // ---------------------------------------------------------------------------
@@ -149,11 +166,26 @@ class AccountManager with AuthyraLogging {
   Future<void> switchTo(String userId) async {
     try {
       logInfo('Switching to account: $userId');
+      final fromUser = sessionManager.activeUser;
+
+      if (callbacks != null && fromUser != null) {
+        final result = await callbacks!.onBeforeAccountSwitch(fromUser, userId);
+        if (result.isDenied) {
+          throw AuthenticationFailedException(
+            result.errorMessage ?? 'Account switch denied by callback',
+          );
+        }
+      }
 
       await sessionManager.switchAccount(userId);
 
       final session = await sessionManager.getActiveSession();
       if (session != null) {
+        if (fromUser != null && fromUser.id != session.user.id) {
+          eventBus?.emit(
+            AccountSwitchEvent(fromUser: fromUser, toUser: session.user),
+          );
+        }
         onStateChange(AuthState.authenticated(session.user));
       }
 
@@ -219,8 +251,25 @@ class AccountManager with AuthyraLogging {
     try {
       logInfo('Signing out account: $userId');
 
+      final target = await sessionManager.getSession(userId);
+      if (target != null && callbacks != null) {
+        final result = await callbacks!.onBeforeAccountRemove(target.user);
+        if (result.isDenied) {
+          throw AuthenticationFailedException(
+            result.errorMessage ?? 'Account removal denied by callback',
+          );
+        }
+      }
+
       final wasActive = sessionManager.activeUser?.id == userId;
       await sessionManager.removeSession(userId);
+
+      if (target != null) {
+        eventBus?.emit(
+          AccountRemovedEvent(
+              userId: target.user.id, email: target.user.email ?? ''),
+        );
+      }
 
       // Propagate the resulting auth state when the active account changed.
       if (wasActive) {

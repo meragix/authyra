@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:test/test.dart';
 import 'package:authyra/src/session/session_manager.dart';
 import 'package:authyra/src/models/auth_account.dart';
@@ -65,7 +67,8 @@ void main() {
 
       test('prunes expired sessions at startup', () async {
         await manager.saveSession(_session('alice'));
-        await manager.saveSession(_session('bob', expired: true), setAsActive: false);
+        await manager.saveSession(_session('bob', expired: true),
+            setAsActive: false);
         await manager.dispose();
 
         final manager2 = SessionManager(storage: storage);
@@ -109,11 +112,50 @@ void main() {
         expect(notified?.user.id, 'alice');
       });
 
-      test('session is persisted to storage', () async {
+      test('session is persisted to storage under its own key', () async {
         await manager.saveSession(_session('alice'));
-        final raw = await storage.read('authyra_session_registry');
+        final raw = await storage.read('session:alice');
         expect(raw, isNotNull);
         expect(raw, contains('alice'));
+      });
+
+      test('refreshing one account does not rewrite another account\'s entry',
+          () async {
+        await manager.saveSession(_session('alice'));
+        await manager.saveSession(_session('bob'), setAsActive: false);
+        final bobRaw = await storage.read('session:bob');
+
+        final updated = _session('alice').refreshed(
+          newAccessToken: 'new_token',
+          newExpiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
+        await manager.saveSession(updated);
+
+        expect(await storage.read('session:bob'), bobRaw);
+      });
+
+      test('migrates a legacy monolithic registry blob on first load',
+          () async {
+        final legacyStorage = InMemoryStorage();
+        final legacyRegistry = {
+          'sessions': {'alice': _session('alice').toJson()},
+          'activeUserId': 'alice',
+          'lastUpdated': DateTime.now().toIso8601String(),
+        };
+        await legacyStorage.write(
+          'authyra_session_registry',
+          jsonEncode(legacyRegistry),
+        );
+
+        final migratedManager = SessionManager(storage: legacyStorage);
+        await migratedManager.initialize();
+
+        expect(migratedManager.accountCount, 1);
+        expect(migratedManager.activeSession?.user.id, 'alice');
+        expect(await legacyStorage.read('session:alice'), isNotNull);
+        expect(await legacyStorage.read('authyra_session_registry'), isNull);
+
+        await migratedManager.dispose();
       });
     });
 
@@ -128,7 +170,8 @@ void main() {
         expect(session?.user.id, 'alice');
       });
 
-      test('throws TokenExpiredException when active session is expired', () async {
+      test('throws TokenExpiredException when active session is expired',
+          () async {
         await manager.saveSession(_session('alice', expired: true));
         expect(
           () => manager.getActiveSession(),
@@ -195,7 +238,8 @@ void main() {
         );
       });
 
-      test('throws TokenExpiredException when switching to expired session', () async {
+      test('throws TokenExpiredException when switching to expired session',
+          () async {
         await manager.saveSession(_session('alice'));
         await manager.saveSession(
           _session('bob', expired: true),
