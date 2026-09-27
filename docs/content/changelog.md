@@ -1,6 +1,8 @@
 ---
 title: Changelog
 description: Notable changes to the authyra package.
+navigation:
+  icon: i-lucide-history
 seo:
   title: Changelog | Authyra
   description: Release notes for the authyra package, additions, changes, and fixes across versions.
