@@ -210,7 +210,10 @@ class AuthyraInstance with AuthyraLogging {
 
   /// Returns the currently active [AuthSession], or `null`.
   ///
-  /// Throws [TokenExpiredException] when the session exists but has expired.
+  /// Returns `null`, rather than throwing, when the session has expired:
+  /// on expiry with [AuthConfig.autoRefresh] enabled but the refresh
+  /// attempt failing, or with auto-refresh disabled and the token simply
+  /// past [AuthSession.expiresAt].
   Future<AuthSession?> getSession() => _client.getSession();
 
   /// Returns the currently active [AuthUser], or `null`.
@@ -218,7 +221,8 @@ class AuthyraInstance with AuthyraLogging {
 
   /// Returns the active access token, or `null`.
   ///
-  /// Throws [TokenExpiredException] when the session is expired.
+  /// Returns `null`, not a thrown exception, when the session is expired;
+  /// see [getSession].
   Future<String?> getAccessToken() => _client.getAccessToken();
 
   // ---------------------------------------------------------------------------
