@@ -25,6 +25,15 @@ jobs:
       - name: Install workspace dependencies
         run: flutter pub get
 
+      # melos.yaml scripts shell out to `melos exec ...` themselves, so a
+      # `melos` binary must be on PATH even though the steps below invoke
+      # the top-level command via `dart run melos` (which resolves the
+      # workspace's own pinned version for that outer call).
+      - name: Activate melos
+        run: |
+          dart pub global activate melos
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
       - name: Analyze
         run: dart run melos run analyze
 
