@@ -12,6 +12,24 @@ import 'package:authyra/src/models/auth_user.dart';
 /// persist the [account] entry. Providers should populate [accessToken],
 /// [refreshToken], [expiresAt], and [account] whenever the data is available.
 ///
+/// ## Credential vs. session-token semantics
+///
+/// [accessToken] and [refreshToken] are **application session tokens**: the
+/// values [AuthyraClient] stores on the active [AuthSession] and returns via
+/// [AuthyraClient.getAccessToken] for the lifetime of the session. They are
+/// not automatically the identity provider's own tokens.
+///
+/// A provider that authenticates against a third party (Google, Apple, a
+/// custom IdP) but does not itself exchange that identity for an application
+/// session must leave [accessToken] / [refreshToken] `null` here and place
+/// the raw provider credential (an `idToken`, a short-lived provider token
+/// meant for a further exchange, etc.) in [AuthAccount.providerData]
+/// instead. Only populate [accessToken] / [refreshToken] when they are a
+/// real, application-usable session token, for example the token your own
+/// backend returns after exchanging the provider credential, or the token an
+/// [OAuth2Provider] obtains by completing the full authorization code
+/// exchange itself.
+///
 /// ```dart
 /// // In an OAuth2 provider after the code/token exchange:
 /// return AuthSignInResult(
@@ -40,10 +58,18 @@ class AuthSignInResult {
   /// provider ID and user ID as the `providerAccountId`.
   final AuthAccount? account;
 
-  /// Short-lived access token for API requests, if returned by the provider.
+  /// Short-lived **application session** access token, if available.
+  ///
+  /// Must be a token your application (or [AuthyraClient.getAccessToken]
+  /// callers) can actually use. Never populate this with a raw
+  /// identity-provider credential that still needs to be exchanged; see
+  /// "Credential vs. session-token semantics" above.
   final String? accessToken;
 
-  /// Long-lived refresh token for silent renewal, if returned by the provider.
+  /// Long-lived **application session** refresh token, if available.
+  ///
+  /// Same rule as [accessToken]: this is what [AuthProvider.refreshToken]
+  /// will receive back on renewal, not a raw provider credential.
   final String? refreshToken;
 
   /// When [accessToken] expires. Falls back to [AuthConfig.tokenLifetimeDuration]

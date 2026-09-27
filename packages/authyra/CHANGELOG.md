@@ -20,6 +20,7 @@ All notable changes to the `authyra` package are documented here.
 
 ### Changed
 
+- Clarified the credential vs. session-token contract in doc comments: `AuthSignInResult.accessToken`/`refreshToken` and `AuthAccount.accessToken`/`refreshToken` must be application session tokens, never a raw identity-provider credential (e.g. a Google `idToken`). Raw provider credentials belong in `AuthAccount.providerData`. No API change, documentation only.
 - `AuthSession` is now a **pointer** to the active `AuthAccount`: token fields (`accessToken`, `refreshToken`, `expiresAt`, `providerId`) are computed getters delegating to `activeAccount`. The new required field `activeAccountId` identifies the active entry in `linkedAccounts`. Storage format migrates gracefully from the legacy flat structure.
 - `AuthProvider.signIn` and all callbacks now accept `AuthSignInParams?` instead of `Map<String, dynamic>?`.
 - `AuthSession.linkedProviders: List<String>` replaced by `linkedAccounts: List<AuthAccount>`. Added `linkedProviderIds` getter and updated `hasLinkedProvider()`. `fromJson` migrates legacy format gracefully.

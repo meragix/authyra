@@ -56,21 +56,39 @@ class AuthAccount extends Equatable {
   /// - Credentials: email address (`'alice@example.com'`)
   final String providerAccountId;
 
-  /// Access token returned by the provider at sign-in time, if available.
+  /// Application session access token for this account, if available.
+  ///
+  /// This is the token [AuthyraClient] surfaces to the app and, when
+  /// [AuthProvider.supportsRefresh] is `true`, the same kind of token
+  /// [AuthProvider.refreshToken] renews. A raw identity-provider credential
+  /// that is not itself an application-usable session token (e.g. a Google
+  /// `idToken` consumed once at sign-in) belongs in [providerData] instead,
+  /// never here. See [AuthSignInResult]'s "Credential vs. session-token
+  /// semantics" section for the full rule.
   final String? accessToken;
 
-  /// Refresh token returned by the provider at sign-in time, if available.
+  /// Application session refresh token for this account, if available.
+  ///
+  /// Passed back to [AuthProvider.refreshToken] to renew [accessToken]. Same
+  /// rule as [accessToken]: never a raw provider credential.
   final String? refreshToken;
 
   /// When [accessToken] expires, if known.
   final DateTime? tokenExpiresAt;
 
-  /// Arbitrary provider-specific metadata (e.g., OAuth scopes, hosted domain).
+  /// Arbitrary provider-specific metadata, including raw identity-provider
+  /// credentials that are not application session tokens (e.g., a Google
+  /// `idToken`, OAuth scopes, a hosted domain).
+  ///
+  /// This is where a provider that only acquires an identity credential
+  /// (rather than exchanging it for an application session itself) should
+  /// store that credential, instead of [accessToken] / [refreshToken].
   ///
   /// ```dart
   /// final account = AuthAccount(
   ///   ...,
   ///   providerData: {
+  ///     'idToken': googleIdToken,  // raw credential, not a session token
   ///     'scope': 'email profile',
   ///     'hd': 'example.com',    // Google Workspace domain
   ///   },
@@ -152,8 +170,7 @@ class AuthAccount extends Equatable {
       tokenExpiresAt: json['tokenExpiresAt'] != null
           ? DateTime.parse(json['tokenExpiresAt'] as String)
           : null,
-      providerData:
-          (json['providerData'] as Map<String, dynamic>?) ?? const {},
+      providerData: (json['providerData'] as Map<String, dynamic>?) ?? const {},
     );
   }
 
