@@ -12,7 +12,7 @@ Authyra owns your app's session lifecycle: persistence, token refresh, multi-acc
 
 ## The problem
 
-- **Firebase Auth, Auth0, Supabase Auth**: excellent SDKs, but your app adopts their model. The moment you have a custom backend, multiple tenants, or want to switch provider later, you're re-architecting.
+- **Firebase Auth, Auth0, Supabase Auth**: excellent SDKs, but your app couples its client-side authentication model to that provider. Custom auth flows, a provider change, or supporting more than one become harder to isolate.
 - **Raw OAuth2/OIDC packages** (`openidconnect_flutter` and friends): solve the protocol correctly, then leave session persistence, token refresh, and multi-account switching entirely up to you. Again. In every app.
 - **Most teams hand-roll this layer once, imperfectly, per project.** Authyra is that layer: built once, tested, reusable.
 
@@ -63,15 +63,18 @@ The call site doesn't care who's behind it. That's the whole point.
 
 ## Authyra vs. the usual suspects
 
-| | Firebase Auth | Auth0 Flutter | Supabase Auth | Raw OAuth2/OIDC package | **Authyra** |
-|---|---|---|---|---|---|
-| Backend-agnostic | ❌ Firebase is the backend | ❌ Auth0 is the IdP | ❌ Supabase is the backend | ✅ protocol only | ✅ |
-| Multi-account switching built in | ❌ | ❌ | ❌ | ❌ out of scope | ✅ |
-| Refresh token lifecycle | Managed internally, fixed | Managed internally, fixed | Managed internally, fixed | ❌ you build it | ✅ configurable, with retry and events |
-| Pluggable storage | ❌ fixed to the SDK | ❌ fixed to the SDK | ❌ fixed to the SDK | N/A | ✅ bring your own |
-| Dart core, zero Flutter dependency | ❌ | ❌ | ❌ | package-dependent | ✅ |
+Authyra's real competitor isn't Firebase or Auth0, they solve a different problem well. It's the auth glue code every team ends up hand-writing around whichever SDK they picked.
 
-*This table describes architectural scope, not a quality ranking. Firebase, Auth0, and Supabase are excellent at what they do, it's a different problem than the one Authyra solves.*
+| Capability | Provider SDKs (Firebase, Auth0, Supabase) | Raw OAuth2/OIDC package | **Authyra** |
+|---|---|---|---|
+| Provider-independent session layer | Provider-specific | ❌ | ✅ |
+| Multiple independent sessions on one device | Not the primary abstraction | Build yourself | ✅ |
+| Session persistence contract | Provider-specific | Build yourself | ✅ |
+| Token refresh orchestration | Provider-specific | Build yourself | ✅ |
+| Custom provider strategy | Provider-dependent | Protocol-dependent | ✅ |
+| Pure Dart core | Varies | Varies | ✅ |
+
+*This describes architectural scope, not a quality ranking. Firebase, Auth0, and Supabase are excellent at what they do.*
 
 ---
 
@@ -81,7 +84,7 @@ The call site doesn't care who's behind it. That's the whole point.
 
 **Session-first.** `SessionManager` owns the client-side session lifecycle: restore on app start, proactive token refresh with retry, sign-out, and a reactive `AuthState` stream. This is the part a raw OAuth/OIDC package leaves for you to build yourself.
 
-**Multi-account by design.** This is the feature most competing packages don't have at all. Several signed-in identities can coexist on the device and be switched or signed out independently, without rebuilding your auth architecture:
+**Multi-account by design.** Authyra treats multiple independent sessions as a first-class concept. Several signed-in identities can coexist on the device and be switched or signed out independently, without rebuilding your auth architecture:
 
 ```dart
 // Personal + work account signed in at the same time
@@ -113,8 +116,6 @@ See [Known limitations](#known-limitations): this is *multiple identities on one
 ---
 
 ## Quick start
-
-### Flutter app
 
 ```yaml
 # pubspec.yaml
@@ -174,36 +175,7 @@ StreamBuilder<AuthState>(
 );
 ```
 
-### Dart backend
-
-```yaml
-dependencies:
-  authyra: ^0.1.0
-```
-
-```dart
-import 'package:authyra/authyra.dart';
-
-final client = AuthyraClient(
-  providers: [
-    CredentialsProvider.withTokens(
-      id: 'email',
-      authorize: (creds) async {
-        // validate against your DB
-        return AuthSignInResult(user: AuthUser(id: '...', email: creds?.email ?? ''));
-      },
-    ),
-  ],
-  storage: MyRedisStorage(),
-);
-
-await client.initialize();
-
-final user = await client.signIn('email', params: CredentialsSignInParams(
-  email: 'alice@example.com',
-  password: 's3cr3t',
-));
-```
+Using `authyra` outside Flutter (Dart CLI, backend)? See [`packages/authyra`'s README](packages/authyra#readme) for the `AuthyraClient`-only setup, no singleton, no Flutter dependency.
 
 ---
 
@@ -218,7 +190,7 @@ packages/
 **Two layers, one principle:** the core is pure Dart. Flutter-specific code (platform channels, URL launcher, secure storage) lives entirely in `authyra_flutter`. The same provider interface works on both layers.
 
 ```text
-AuthyraClient          ← stateless orchestrator (injectable, testable)
+AuthyraClient          ← dependency-injected orchestrator (no global state, testable)
     └── SessionManager ← CRUD + multi-account registry + proactive token refresh
     └── AuthProvider   ← pluggable auth strategy (credentials / OAuth2 / custom)
     └── AuthStorage    ← pluggable persistence (you own the implementation)
@@ -236,7 +208,7 @@ The boundary that matters: **providers authenticate, Authyra manages the resulti
 | Provider | Package | Strategy |
 |---|---|---|
 | `CredentialsProvider` | `authyra` | Email/password or any form-based flow |
-| `CredentialsProvider.withTokens` | `authyra` | JWT backend: stores access + refresh tokens |
+| `CredentialsProvider.withTokens` | `authyra` | JWT backend: returns access + refresh tokens for `SessionManager` to persist |
 | `OAuth2Provider` | `authyra_flutter` | Authorization Code + PKCE (any IdP) |
 | `GoogleProvider` | `authyra_flutter` | Prebuilt Google Sign-In |
 | `GitHubOAuth2Provider` | `authyra_flutter` | Prebuilt GitHub OAuth |
