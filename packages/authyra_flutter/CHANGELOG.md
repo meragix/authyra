@@ -6,6 +6,10 @@ All notable changes to the `authyra_flutter` package are documented here.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** `AuthProvider.type` (`AuthProviderType`) removed from `OAuth2Provider`, `ProxyOAuthProvider`, and `AppleProvider`, following its removal from the core `authyra` interface.
+
 ### Changed
 
 - **Breaking:** `OAuth2CallbackHandler` now routes incoming deep links by the OAuth CSRF `state` parameter instead of by URI scheme. `registerProvider(scheme, provider)` / `unregisterProvider(scheme)` are removed; `OAuth2Provider` registers and unregisters itself automatically around each `signIn()` call. Apps no longer call any registration method, only `AppLinks().uriLinkStream.listen(OAuth2CallbackHandler.handleCallback)` at startup. This also fixes a real bug: two `OAuth2Provider`s sharing the same redirect scheme used to silently collide (the second registration replaced the first); routing by `state` removes that collision by construction.

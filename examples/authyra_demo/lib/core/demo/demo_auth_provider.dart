@@ -22,9 +22,6 @@ class DemoAuthProvider implements AuthProvider {
   String get name => 'Demo account';
 
   @override
-  AuthProviderType get type => AuthProviderType.credentials;
-
-  @override
   bool get supportsRefresh => true;
 
   @override
@@ -36,7 +33,9 @@ class DemoAuthProvider implements AuthProvider {
     final email = creds?.email.trim();
     final password = creds?.password;
 
-    await Future.delayed(const Duration(milliseconds: 350)); // feel like a real call
+    await Future.delayed(
+      const Duration(milliseconds: 350),
+    ); // feel like a real call
 
     if (email == null || email.isEmpty) return null;
     if (password != demoPassword) return null;
@@ -65,7 +64,8 @@ class DemoAuthProvider implements AuthProvider {
     );
   }
 
-  String _token(String kind) => 'demo-$kind-${DateTime.now().microsecondsSinceEpoch}';
+  String _token(String kind) =>
+      'demo-$kind-${DateTime.now().microsecondsSinceEpoch}';
 
   String _displayName(String email) {
     final local = email.split('@').first;

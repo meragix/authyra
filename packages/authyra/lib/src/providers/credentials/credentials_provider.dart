@@ -138,9 +138,6 @@ class CredentialsProvider with AuthyraLogging implements AuthProvider {
   String get name => 'Credentials';
 
   @override
-  AuthProviderType get type => AuthProviderType.credentials;
-
-  @override
   bool get supportsRefresh => false;
 
   @override
@@ -178,7 +175,7 @@ class CredentialsProvider with AuthyraLogging implements AuthProvider {
 
   @override
   Future<void> signOut({String? userId}) async {
-    logDebug('signOut — no-op (session invalidation handled by the backend)');
+    logDebug('signOut: no-op (session invalidation handled by the backend)');
   }
 
   @override

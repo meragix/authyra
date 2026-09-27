@@ -126,9 +126,6 @@ class AppleProvider with AuthyraLogging implements AuthProvider {
   @override
   String get name => 'apple';
 
-  @override
-  AuthProviderType get type => AuthProviderType.oauth2;
-
   /// Always `true`. Apple issues refresh tokens that enable silent renewal.
   @override
   bool get supportsRefresh => true;

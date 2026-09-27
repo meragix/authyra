@@ -4,6 +4,10 @@ All notable changes to the `authyra` package are documented here.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** `AuthProviderType` enum and `AuthProvider.type` removed. Nothing in `AuthyraClient` or elsewhere branched on it; it was a decorative field carrying no behavior. Providers no longer declare a `type` getter.
+
 ### Added
 
 - `TokenRefresher`: background token-refresh scheduler with configurable check interval, expiry threshold, and linear retry policy. Owned by `SessionManager`; wired up by `AuthyraClient` at construction time.

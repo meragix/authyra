@@ -117,14 +117,18 @@ CredentialsProvider.withTokens(
 Implement `AuthProvider` to plug in any strategy: SAML, magic link, phone OTP, a proprietary SSO:
 
 ```dart
+class MagicLinkSignInParams extends AuthSignInParams {
+  final String token;
+  const MagicLinkSignInParams(this.token);
+}
+
 class MagicLinkProvider implements AuthProvider {
   @override String get id   => 'magic-link';
-  @override AuthProviderType get type => AuthProviderType.magicLink;
   @override bool get supportsRefresh => false;
 
   @override
-  Future<AuthSignInResult?> signIn({Map<String, dynamic>? params}) async {
-    final token = params?['token'] as String?;
+  Future<AuthSignInResult?> signIn({AuthSignInParams? params}) async {
+    final token = params is MagicLinkSignInParams ? params.token : null;
     if (token == null) return null;
     final res = await myApi.post('/auth/magic', body: {'token': token});
     if (res.statusCode != 200) return null;

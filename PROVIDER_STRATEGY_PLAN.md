@@ -74,7 +74,7 @@ Not part of the MVP, revisit only once a real case demands it:
 ### Core (`authyra`)
 
 - [x] Document the credential vs session-token rule (3.1)
-- [ ] Remove `AuthProviderType` or justify it with real branching logic (3.5)
+- [x] Remove `AuthProviderType` or justify it with real branching logic (3.5). Removed entirely: nothing branched on it.
 - [ ] Add test coverage for `AuthCallbacks` (deny paths for each hook) and `AuthyraPlugin` (install + hook invocation, plugin exceptions swallowed and logged)
 - [ ] `dart pub publish --dry-run` clean (`melos run publish:check`)
 - [ ] `CHANGELOG.md` reflects the final pre-release state, `[Unreleased]` cut into a real version

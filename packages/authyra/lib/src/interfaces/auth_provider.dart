@@ -2,25 +2,6 @@ import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 import 'package:authyra/src/models/auth_sign_in_result.dart';
 import 'package:authyra/src/models/auth_token_result.dart';
 
-/// The authentication strategy implemented by a provider.
-///
-/// Used by [AuthyraClient] to apply strategy-specific validation and
-/// to generate meaningful log messages and error descriptions.
-enum AuthProviderType {
-  /// Email + password or any custom credentials form.
-  credentials,
-
-  /// OAuth 2.0 / OIDC Authorization Code flow (with optional PKCE).
-  oauth2,
-
-  // v2 — not yet implemented:
-  // magicLink,  // Passwordless email / magic-link flow.
-  // phone,      // SMS one-time-password flow.
-
-  /// Custom or composite strategy not covered by the above.
-  custom,
-}
-
 /// Abstract interface for all Authyra authentication providers.
 ///
 /// Implement this interface to plug a new authentication strategy into
@@ -44,9 +25,6 @@ enum AuthProviderType {
 /// class MyBackendProvider implements AuthProvider {
 ///   @override
 ///   String get id => 'my-backend';
-///
-///   @override
-///   AuthProviderType get type => AuthProviderType.credentials;
 ///
 ///   @override
 ///   bool get supportsRefresh => true;
@@ -99,12 +77,6 @@ abstract class AuthProvider {
   /// Used in logs, error messages, and optionally in UI
   /// (e.g., "Sign in with {name}" buttons). Defaults to [id].
   String get name => id;
-
-  /// The authentication strategy implemented by this provider.
-  ///
-  /// Enables [AuthyraClient] to apply strategy-specific validation
-  /// (e.g., skipping email/password checks for OAuth2 providers).
-  AuthProviderType get type => AuthProviderType.custom;
 
   /// Whether this provider can renew an expired access token silently.
   ///

@@ -1,7 +1,6 @@
 import 'package:authyra/src/models/auth_sign_in_result.dart';
 import 'package:test/test.dart';
 import 'package:authyra/src/providers/credentials/credentials_provider.dart';
-import 'package:authyra/src/interfaces/auth_provider.dart';
 import 'package:authyra/src/interfaces/auth_sign_in_params.dart';
 import 'package:authyra/src/models/auth_user.dart';
 
@@ -67,7 +66,8 @@ void main() {
 
       test('null params passed as null to callback', () async {
         CredentialsSignInParams? received = CredentialsSignInParams(
-          email: 'x', password: 'x',
+          email: 'x',
+          password: 'x',
         );
 
         final provider = CredentialsProvider(
@@ -82,7 +82,8 @@ void main() {
         expect(received, isNull);
       });
 
-      test('non-CredentialsSignInParams is passed as null to callback', () async {
+      test('non-CredentialsSignInParams is passed as null to callback',
+          () async {
         CredentialsSignInParams? received =
             CredentialsSignInParams(email: 'x', password: 'x');
 
@@ -153,23 +154,21 @@ void main() {
     });
 
     group('provider metadata', () {
-      test('type is credentials', () {
-        final p = CredentialsProvider(id: 'email', authorize: (_) async => null);
-        expect(p.type, AuthProviderType.credentials);
-      });
-
       test('supportsRefresh is false', () {
-        final p = CredentialsProvider(id: 'email', authorize: (_) async => null);
+        final p =
+            CredentialsProvider(id: 'email', authorize: (_) async => null);
         expect(p.supportsRefresh, isFalse);
       });
 
       test('supportsSignOut is false', () {
-        final p = CredentialsProvider(id: 'email', authorize: (_) async => null);
+        final p =
+            CredentialsProvider(id: 'email', authorize: (_) async => null);
         expect(p.supportsSignOut, isFalse);
       });
 
       test('id is set from constructor', () {
-        final p = CredentialsProvider(id: 'my-provider', authorize: (_) async => null);
+        final p = CredentialsProvider(
+            id: 'my-provider', authorize: (_) async => null);
         expect(p.id, 'my-provider');
       });
     });

@@ -44,9 +44,6 @@ class _FakeProvider implements AuthProvider {
   String get name => 'Fake';
 
   @override
-  AuthProviderType get type => AuthProviderType.custom;
-
-  @override
   bool get supportsRefresh => returnRefreshToken != null;
 
   @override
@@ -88,9 +85,6 @@ class _SignOutProvider implements AuthProvider {
 
   @override
   String get name => 'SignOut';
-
-  @override
-  AuthProviderType get type => AuthProviderType.custom;
 
   @override
   bool get supportsRefresh => false;
@@ -449,7 +443,7 @@ void main() {
           returnUser: AuthUser(id: 'usr_1'),
           returnAccessToken: 'at_old',
           returnRefreshToken: 'rt_123',
-          // expires in 1 minute — within default 5-minute refresh threshold
+          // expires in 1 minute, within default 5-minute refresh threshold
           returnExpiresAt: now.add(const Duration(minutes: 1)),
         );
         final client = AuthyraClient(
@@ -470,7 +464,7 @@ void main() {
           'returns null and emits SessionExpiredEvent when refresh unsupported',
           () async {
         final now = DateTime.now();
-        // Provider with no refresh token — supportsRefresh is false
+        // Provider with no refresh token, supportsRefresh is false
         final provider = _FakeProvider(
           returnUser: AuthUser(id: 'usr_1'),
           returnAccessToken: 'at_old',

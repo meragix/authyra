@@ -111,9 +111,6 @@ class ProxyOAuthProvider
   @override
   String get name => config.providerName;
 
-  @override
-  AuthProviderType get type => AuthProviderType.oauth2;
-
   /// Proxy providers cannot refresh tokens client-side; the backend holds
   /// the refresh token. Set to `true` if you add a backend refresh endpoint
   /// and override [refreshToken].

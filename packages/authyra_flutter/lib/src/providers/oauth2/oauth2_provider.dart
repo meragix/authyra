@@ -124,9 +124,6 @@ class OAuth2Provider
   @override
   String get name => config.providerName;
 
-  @override
-  AuthProviderType get type => AuthProviderType.oauth2;
-
   /// Always `true`. OAuth2 providers return refresh tokens that enable
   /// silent session renewal via [refreshToken].
   @override
