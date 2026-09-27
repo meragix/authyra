@@ -1,10 +1,88 @@
 # Authyra
 
-Authentication framework for Dart and Flutter. Handles the full auth lifecycle: session persistence, token refresh, multi-account; without locking you into a backend or a UI framework.
+**Provider-agnostic authentication orchestration for Dart and Flutter.**
+
+Authyra is not another identity provider. It's the layer between your Flutter app and whatever auth infrastructure you already have: a custom API, Auth0, Firebase, Supabase, or a raw OIDC provider. It owns the client-side session lifecycle (persistence, token refresh, multi-account, events, plugins) through one consistent API, independent of which provider or backend produced the sign-in.
 
 [![pub.dev](https://img.shields.io/pub/v/authyra.svg)](https://pub.dev/packages/authyra)
 [![pub.dev flutter](https://img.shields.io/pub/v/authyra_flutter.svg?label=authyra_flutter)](https://pub.dev/packages/authyra_flutter)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+---
+
+## Why Authyra?
+
+```text
+┌──────────────────────┐
+│    Flutter App       │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│       Authyra        │
+│                       │
+│  Session lifecycle    │
+│  Token refresh        │
+│  Persistence          │
+│  Multi-account        │
+│  Events & plugins     │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Your auth provider   │
+│                       │
+│  Custom API           │
+│  OAuth2 / OIDC        │
+│  Auth0 / Firebase...  │
+└──────────────────────┘
+```
+
+Authyra does not try to become your identity provider. It gives your app a consistent session layer regardless of what sits underneath.
+
+Most Flutter auth packages bundle three things together: the authentication protocol, the identity provider, and your app's session/UI plumbing. That's convenient once you've committed to that provider, and awkward the moment you haven't, or need to support more than one.
+
+- **`firebase_auth`** solves "I want Firebase as my auth backend." If your backend is NestJS, Laravel, Go, or your own API, it's mostly beside the point.
+- **`auth0_flutter`** and **`supabase_flutter`** solve the same problem for their own platforms. Good SDKs, but your app adopts their model.
+- **`openidconnect_flutter`** solves a real, narrower problem: implementing OAuth2/OIDC correctly in Flutter. It stops at the protocol though, it isn't trying to manage your app's session lifecycle, multi-account state, or persistence.
+
+Authyra sits one layer above all of these. It doesn't replace them: `authyra_flutter` ships an `OAuth2Provider` you can point at any OIDC-compliant IdP, including Auth0 or your own server, plus prebuilt Google/GitHub/Apple providers. What Authyra owns is what happens in your app *after* a provider says yes: session persistence, proactive token refresh, multi-account switching, and lifecycle events, through the same API no matter which provider produced the sign-in.
+
+---
+
+## Core principles
+
+**Provider-agnostic.** Implement `AuthProvider` once to plug in any strategy. Ships with `CredentialsProvider` (core) and `OAuth2Provider` / `GoogleProvider` / `GitHubOAuth2Provider` / `AppleProvider` / `ProxyOAuthProvider` (`authyra_flutter`). Add your own for anything else: a SAML bridge, magic link, phone OTP. The call site never changes:
+
+```dart
+// Your own backend today...
+await Authyra.instance.signIn('email', params: CredentialsSignInParams(
+  email: 'alice@example.com',
+  password: 's3cr3t',
+));
+
+// ...add Google next month. Same client, same call shape, no rewrite:
+await Authyra.instance.signIn('google');
+```
+
+**Session-first.** `SessionManager` owns the client-side session lifecycle: restore on app start, proactive token refresh with retry, sign-out, and a reactive `AuthState` stream. This is the part a raw OAuth/OIDC package leaves for you to build yourself.
+
+**Multi-account by design.** This is the feature most competing packages don't have at all. Several signed-in identities can coexist on the device and be switched or signed out independently, without rebuilding your auth architecture:
+
+```dart
+// Personal + work account signed in at the same time
+await Authyra.instance.signIn('google');                    // personal Gmail (now active)
+await Authyra.instance.signIn('email', params: workCreds);  // work account (now active)
+await Authyra.instance.accounts.switchTo(personalUserId);   // back to personal, no re-auth
+final all = await Authyra.instance.accounts.getAll();       // both, most-recent-first
+await Authyra.instance.accounts.signOut(workUserId);        // drop just one
+```
+
+See [Known limitations](#known-limitations): this is *multiple identities on one device*, not *linking two providers to one identity*, that part isn't built yet.
+
+**Storage-agnostic.** `AuthStorage` is a plain key-value contract. The core ships zero concrete implementation; you bring Keychain/Keystore (`authyra_flutter`'s `SecureAuthStorage`), Redis, an encrypted file, or an in-memory store for tests.
+
+**UI-agnostic.** `authyra` has zero Flutter dependency; nothing in the core package imports `flutter_*` or depends on widgets, navigation, or a state-management choice. `authyra_flutter` is the officially supported UI layer, not a hard requirement.
 
 ---
 
@@ -15,7 +93,7 @@ Authentication framework for Dart and Flutter. Handles the full auth lifecycle: 
 | [`authyra`](packages/authyra) | Core framework: pure Dart, zero Flutter dependency |
 | [`authyra_flutter`](packages/authyra_flutter) | Flutter layer: OAuth2, widgets, GoRouter guard |
 
-**Use `authyra` alone** for Dart backends (Shelf, Dart Frog) or CLI tools.
+**Use `authyra` alone** for Dart CLI tools, or for backend contexts (Shelf, Dart Frog) where the runtime-agnostic core is a fit; this path is less exercised in practice than the Flutter one, so treat it as capable rather than battle-tested.
 **Use `authyra_flutter`** for Flutter apps: it re-exports the entire core so you only ever need one import.
 
 ---
@@ -135,6 +213,8 @@ AuthyraClient          ← stateless orchestrator (injectable, testable)
 AuthyraInstance        ← singleton wrapper (reactive streams + sync state cache)
 ```
 
+The boundary that matters: **providers authenticate, Authyra manages the resulting application session.** Authyra never becomes your identity provider; it normalizes whatever provider you already chose.
+
 ---
 
 ## Providers
@@ -170,40 +250,75 @@ client.events.stream.listen((e) => auditLog.write(e.toJson()));
 
 ## Plugins
 
+Plugins observe; they never block anything. A hook that throws is caught and logged internally, not propagated:
+
 ```dart
 final client = AuthyraClient(
   providers: [...],
   storage: SecureAuthStorage(),
-  plugins: [
-    RateLimitPlugin(maxAttempts: 5, window: Duration(minutes: 15)),
-    AuditLogPlugin(logger: myLogger),
-  ],
+  plugins: [AuditLogPlugin(logger: myLogger)],
 );
 ```
 
 ```dart
-class RateLimitPlugin extends AuthyraPlugin {
-  @override String get name => 'rate-limit';
+class AuditLogPlugin extends AuthyraPlugin {
+  final Logger _logger;
+  AuditLogPlugin({required Logger logger}) : _logger = logger;
+
+  @override String get name => 'audit-log';
 
   @override
-  void install(AuthyraClient client) {
-    // wire up client references if needed
-  }
+  void install(AuthyraClient client) {}
 
   @override
-  Future<void> onBeforeSignIn(String providerId, AuthSignInParams? params) async {
-    if (_isRateLimited(providerId)) {
-      throw AuthenticationFailedException('Too many attempts. Try again later.');
-    }
+  Future<void> onAfterSignIn(AuthSession session) async {
+    _logger.info('Signed in: ${session.user.email}');
   }
 }
 ```
+
+For rules that need to *reject* an operation (rate limits, deny lists), override `AuthCallbacks` instead, that's the one mechanism built to gate before an action runs:
+
+```dart
+class RateLimitCallbacks extends AuthCallbacks {
+  @override
+  Future<CallbackResult> onBeforeSignIn(
+    String providerId,
+    AuthSignInParams? params,
+  ) async {
+    if (_isRateLimited(providerId)) {
+      return const CallbackResult.deny('Too many attempts. Try again later.');
+    }
+    return const CallbackResult.allow();
+  }
+}
+
+final client = AuthyraClient(
+  providers: [...],
+  storage: SecureAuthStorage(),
+  callbacks: RateLimitCallbacks(),
+);
+```
+
+---
+
+## What Authyra is not
+
+- **An identity provider.** No hosted login page, no user database. You bring the provider; Authyra orchestrates it.
+- **A replacement for OAuth2/OIDC.** `OAuth2Provider` implements the protocol so you don't have to, but Authyra's job starts once that flow returns a result.
+- **A UI kit.** `authyra_flutter` ships a handful of glue widgets (`AuthGuard`, router integration), not a design system.
 
 ---
 
 ## Known limitations
 
 **Account linking isn't built yet.** Multi-account (several signed-in identities switchable side by side) works today. Linking two providers to the *same* identity (e.g., Google and GitHub for one person) does not: `AuthSession.linkedAccounts` exists as a data structure, but none of the built-in providers merge two sign-ins into one `AuthUser`, each provider's own subject claim becomes the `AuthUser.id`. Two sign-ins via different providers currently register as two separate accounts, not one linked account.
+
+---
+
+## Status
+
+Authyra is experimental, `0.x`. The API may change before `1.0.0`. The `0.x` line is deliberately about proving the `AuthProvider` + `SessionManager` + `AuthStorage` contract is right before growing the provider list further.
 
 ---
 
