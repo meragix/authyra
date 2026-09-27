@@ -1,30 +1,40 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:authyra_demo/app.dart';
+import 'package:authyra_demo/core/demo/authyra_bootstrap.dart';
+import 'package:authyra_flutter/authyra_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:authyra_demo/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  tearDown(() async {
+    if (Authyra.isInitialized) {
+      await Authyra.instance.dispose();
+    }
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('shows the login page, then the dashboard after demo sign-in', (tester) async {
+    final bootstrap = await AuthyraBootstrap.build(storage: InMemoryStorage());
+    await tester.pumpWidget(AuthyraDemoApp(bootstrap: bootstrap));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    expect(find.text('Continue with demo account'), findsOneWidget);
+
+    // The dashboard has a live 1s countdown ticker once mounted, so
+    // pumpAndSettle() would never converge here: pump a bounded number of
+    // frames instead, enough to cover the demo provider's fake network delay.
+    await tester.tap(find.text('Continue with demo account'));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // "Dashboard" itself appears twice (page heading + bottom nav label),
+    // so assert on the page's unique subtitle instead.
+    expect(
+      find.text('This is the live state Authyra is holding for the active account.'),
+      findsOneWidget,
+    );
+    expect(find.text('Continue with demo account'), findsNothing);
+
+    // SessionManager's background TokenRefresher started a periodic timer on
+    // sign-in; stop it explicitly before the test ends rather than relying
+    // solely on tearDown, the widget-tree-disposal check runs first.
+    await Authyra.instance.dispose();
   });
 }

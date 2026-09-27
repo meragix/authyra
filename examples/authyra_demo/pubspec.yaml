@@ -1,11 +1,11 @@
 name: authyra_demo
-description: "A new Flutter project."
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+description: "Interactive demo of Authyra: session inspector, multi-account, live token refresh, and the callbacks/plugins distinction."
+publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.10.8
+  sdk: ^3.11.0
 
 dependencies:
   flutter:
@@ -13,7 +13,11 @@ dependencies:
 
   authyra_flutter:
     path: ../../packages/authyra_flutter
-  app_links: ^3.5.0  # Recommandé
+
+  shadcn_ui: ^0.55.0
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.5
+  flutter_json: ^0.1.0
 
 dev_dependencies:
   flutter_test:
@@ -23,4 +27,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
