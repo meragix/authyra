@@ -1,8 +1,8 @@
 # Authyra
 
-**Provider-agnostic authentication orchestration for Dart and Flutter.**
+**The authentication orchestrator for Flutter. Not another Identity Provider.**
 
-Authyra is not another identity provider. It's the layer between your Flutter app and whatever auth infrastructure you already have: a custom API, Auth0, Firebase, Supabase, or a raw OIDC provider. It owns the client-side session lifecycle (persistence, token refresh, multi-account, events, plugins) through one consistent API, independent of which provider or backend produced the sign-in.
+Authyra owns your app's session lifecycle: persistence, token refresh, multi-account switching, events. Plug in Firebase, Auth0, or your own API today; swap it later without touching a screen.
 
 [![pub.dev](https://img.shields.io/pub/v/authyra.svg)](https://pub.dev/packages/authyra)
 [![pub.dev flutter](https://img.shields.io/pub/v/authyra_flutter.svg?label=authyra_flutter)](https://pub.dev/packages/authyra_flutter)
@@ -10,49 +10,43 @@ Authyra is not another identity provider. It's the layer between your Flutter ap
 
 ---
 
-## Why Authyra?
+## The problem
+
+- **Firebase Auth, Auth0, Supabase Auth**: excellent SDKs, but your app adopts their model. The moment you have a custom backend, multiple tenants, or want to switch provider later, you're re-architecting.
+- **Raw OAuth2/OIDC packages** (`openidconnect_flutter` and friends): solve the protocol correctly, then leave session persistence, token refresh, and multi-account switching entirely up to you. Again. In every app.
+- **Most teams hand-roll this layer once, imperfectly, per project.** Authyra is that layer: built once, tested, reusable.
+
+## The mental model
 
 ```text
 ┌──────────────────────┐
-│    Flutter App       │
-└──────────┬───────────┘
+│    Flutter App        │
+└──────────┬────────────┘
            │
            ▼
 ┌──────────────────────┐
-│       Authyra        │
-│                       │
-│  Session lifecycle    │
-│  Token refresh        │
-│  Persistence          │
-│  Multi-account        │
-│  Events & plugins     │
-└──────────┬───────────┘
+│       Authyra         │
+│                        │
+│  Session lifecycle     │
+│  Token refresh         │
+│  Persistence           │
+│  Multi-account         │
+│  Events & plugins      │
+└──────────┬────────────┘
            │
            ▼
 ┌──────────────────────┐
-│  Your auth provider   │
-│                       │
-│  Custom API           │
-│  OAuth2 / OIDC        │
-│  Auth0 / Firebase...  │
+│  Your auth provider    │
+│                        │
+│  Custom API            │
+│  OAuth2 / OIDC         │
+│  Auth0 / Firebase...   │
 └──────────────────────┘
 ```
 
-Authyra does not try to become your identity provider. It gives your app a consistent session layer regardless of what sits underneath.
+**Providers authenticate. Authyra manages the resulting session.** Swap the provider underneath; the session layer above it never changes.
 
-Most Flutter auth packages bundle three things together: the authentication protocol, the identity provider, and your app's session/UI plumbing. That's convenient once you've committed to that provider, and awkward the moment you haven't, or need to support more than one.
-
-- **`firebase_auth`** solves "I want Firebase as my auth backend." If your backend is NestJS, Laravel, Go, or your own API, it's mostly beside the point.
-- **`auth0_flutter`** and **`supabase_flutter`** solve the same problem for their own platforms. Good SDKs, but your app adopts their model.
-- **`openidconnect_flutter`** solves a real, narrower problem: implementing OAuth2/OIDC correctly in Flutter. It stops at the protocol though, it isn't trying to manage your app's session lifecycle, multi-account state, or persistence.
-
-Authyra sits one layer above all of these. It doesn't replace them: `authyra_flutter` ships an `OAuth2Provider` you can point at any OIDC-compliant IdP, including Auth0 or your own server, plus prebuilt Google/GitHub/Apple providers. What Authyra owns is what happens in your app *after* a provider says yes: session persistence, proactive token refresh, multi-account switching, and lifecycle events, through the same API no matter which provider produced the sign-in.
-
----
-
-## Core principles
-
-**Provider-agnostic.** Implement `AuthProvider` once to plug in any strategy. Ships with `CredentialsProvider` (core) and `OAuth2Provider` / `GoogleProvider` / `GitHubOAuth2Provider` / `AppleProvider` / `ProxyOAuthProvider` (`authyra_flutter`). Add your own for anything else: a SAML bridge, magic link, phone OTP. The call site never changes:
+## See it in 30 seconds
 
 ```dart
 // Your own backend today...
@@ -64,6 +58,26 @@ await Authyra.instance.signIn('email', params: CredentialsSignInParams(
 // ...add Google next month. Same client, same call shape, no rewrite:
 await Authyra.instance.signIn('google');
 ```
+
+The call site doesn't care who's behind it. That's the whole point.
+
+## Authyra vs. the usual suspects
+
+| | Firebase Auth | Auth0 Flutter | Supabase Auth | Raw OAuth2/OIDC package | **Authyra** |
+|---|---|---|---|---|---|
+| Backend-agnostic | ❌ Firebase is the backend | ❌ Auth0 is the IdP | ❌ Supabase is the backend | ✅ protocol only | ✅ |
+| Multi-account switching built in | ❌ | ❌ | ❌ | ❌ out of scope | ✅ |
+| Refresh token lifecycle | Managed internally, fixed | Managed internally, fixed | Managed internally, fixed | ❌ you build it | ✅ configurable, with retry and events |
+| Pluggable storage | ❌ fixed to the SDK | ❌ fixed to the SDK | ❌ fixed to the SDK | N/A | ✅ bring your own |
+| Dart core, zero Flutter dependency | ❌ | ❌ | ❌ | package-dependent | ✅ |
+
+*This table describes architectural scope, not a quality ranking. Firebase, Auth0, and Supabase are excellent at what they do, it's a different problem than the one Authyra solves.*
+
+---
+
+## Core principles
+
+**Provider-agnostic.** Implement `AuthProvider` once to plug in any strategy. Ships with `CredentialsProvider` (core) and `OAuth2Provider` / `GoogleProvider` / `GitHubOAuth2Provider` / `AppleProvider` / `ProxyOAuthProvider` (`authyra_flutter`). Add your own for anything else: a SAML bridge, magic link, phone OTP.
 
 **Session-first.** `SessionManager` owns the client-side session lifecycle: restore on app start, proactive token refresh with retry, sign-out, and a reactive `AuthState` stream. This is the part a raw OAuth/OIDC package leaves for you to build yourself.
 
