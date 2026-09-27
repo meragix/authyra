@@ -109,9 +109,11 @@ See [Known limitations](#known-limitations): this is *multiple identities on one
 |---|---|
 | [`authyra`](packages/authyra) | Core framework: pure Dart, zero Flutter dependency |
 | [`authyra_flutter`](packages/authyra_flutter) | Flutter layer: OAuth2, widgets, GoRouter guard |
+| [`authyra_apple`](packages/authyra_apple) | Native Sign in with Apple |
 
 **Use `authyra` alone** for Dart CLI tools, or for backend contexts (Shelf, Dart Frog) where the runtime-agnostic core is a fit; this path is less exercised in practice than the Flutter one, so treat it as capable rather than battle-tested.
 **Use `authyra_flutter`** for Flutter apps: it re-exports the entire core so you only ever need one import.
+**Add `authyra_apple`** only if you need Sign in with Apple: it is a separate dependency so apps that don't use it never pull in the native `sign_in_with_apple` plugin.
 
 ---
 
@@ -184,10 +186,11 @@ Using `authyra` outside Flutter (Dart CLI, backend)? See [`packages/authyra`'s R
 ```text
 packages/
 ├── authyra/              ← Core: AuthyraClient, providers, session, storage interface
-└── authyra_flutter/      ← Flutter: OAuth2 providers, SecureStorage, widgets, routing
+├── authyra_flutter/      ← Flutter: OAuth2 providers, SecureStorage, widgets, routing
+└── authyra_apple/        ← Flutter: native Sign in with Apple (sign_in_with_apple)
 ```
 
-**Two layers, one principle:** the core is pure Dart. Flutter-specific code (platform channels, URL launcher, secure storage) lives entirely in `authyra_flutter`. The same provider interface works on both layers.
+**Two layers, one principle:** the core is pure Dart. Flutter-specific code (platform channels, URL launcher, secure storage, native plugins) lives in `authyra_flutter` and `authyra_apple`. The same provider interface works across all of them.
 
 ```text
 AuthyraClient          ← dependency-injected orchestrator (no global state, testable)

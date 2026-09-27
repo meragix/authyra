@@ -108,8 +108,8 @@ Not part of the MVP, revisit only once a real case demands it:
 
 ### Documentation
 
-- [ ] Update `docs/content/3.providers` to reflect the final one-strategy-per-provider decision and the `authyra_apple` package
-- [ ] Root and per-package README quick-start covering: one `CredentialsProvider` example, one HTTP `OAuth2Provider` example (Google or GitHub), one `authyra_apple` example
+- [x] Update `docs/content/3.providers` to reflect the final one-strategy-per-provider decision and the `authyra_apple` package. Went further than just that folder: swept the whole `docs/content` site for stale `OAuth2CallbackHandler.registerProvider`/`AuthProviderType`/browser-based `AppleProvider` references (20 pages) and rewrote `3.providers/5.apple.md` for the new package. Also fixed a pre-existing, unrelated factual error in `3.providers/6.proxy-oauth.md`: it documented `ProxyOAuthProvider` as routed through `OAuth2CallbackHandler`, which was never true, it has always used its own `handleDeepLink`.
+- [x] Root and per-package README quick-start covering: one `CredentialsProvider` example, one HTTP `OAuth2Provider` example (Google or GitHub), one `authyra_apple` example. Satisfied across the root README (Quick start) plus each package's own README.
 - [x] Changelog entries for the `AppleProvider` removal and the `authyra_apple` introduction, framed as a breaking change
 
 ### Release mechanics

@@ -25,7 +25,7 @@ docs/content/
 │   ├── 2.oauth2.md                        # OAuth2Provider — PKCE, config, deep-link
 │   ├── 3.google.md                        # GoogleProvider — setup, scopes, redirect URI
 │   ├── 4.github.md                        # GitHubProvider — config, scopes
-│   ├── 5.apple.md                         # AppleProvider — Sign in with Apple
+│   ├── 5.apple.md                         # AppleProvider (authyra_apple), native Sign in with Apple
 │   └── 6.proxy-oauth.md                   # ProxyOAuthProvider — backend-delegated flow
 │
 ├── 4.guides/
