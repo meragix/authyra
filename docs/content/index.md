@@ -14,7 +14,7 @@ Authyra owns your app's session lifecycle: persistence, token refresh, multi-acc
 #links
   :::u-button
   ---
-  color: neutral
+  color: primary
   size: xl
   to: /getting-started/installation
   trailing-icon: i-lucide-arrow-right
@@ -31,6 +31,22 @@ Authyra owns your app's session lifecycle: persistence, token refresh, multi-acc
   variant: outline
   ---
   Star on GitHub
+  :::
+
+#default
+  :::prose
+
+  ```dart [main.dart]
+  // Your own backend today...
+  await Authyra.instance.signIn('email', params: CredentialsSignInParams(
+    email: 'alice@example.com',
+    password: 's3cr3t',
+  ));
+
+  // ...add Google next month. Same client, same call shape, no rewrite:
+  await Authyra.instance.signIn('google');
+  ```
+
   :::
 ::
 
@@ -96,7 +112,7 @@ Most Flutter auth packages bundle the protocol, the identity provider, and your 
   OAuth2 with [PKCE]{.text-primary}, when you need it
 
   #description
-  `OAuth2Provider` (in `authyra_flutter`) implements the full Authorization Code + PKCE flow. Prebuilt providers for Google, GitHub, Apple, and a proxy mode that keeps client secrets server-side.
+  `OAuth2Provider` (in `authyra_flutter`) implements the full Authorization Code + PKCE flow. Prebuilt providers for Google and GitHub, a proxy mode that keeps client secrets server-side, and native Sign in with Apple in `authyra_apple`.
   :::
 
   :::u-page-feature
