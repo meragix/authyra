@@ -184,6 +184,8 @@ await Authyra.instance.accounts.signOutAll();
 final removed = await Authyra.instance.accounts.cleanExpired();
 ```
 
+**What "multi-account" means here:** each signed-in identity (one `AuthUser`) gets its own entry in the registry above, and you can switch or sign out any of them independently. This is different from *account linking*, linking a Google sign-in and a GitHub sign-in as the same person. `AuthSession.linkedAccounts` exists as a data structure for that, but no built-in provider populates it with more than one entry: `GoogleProvider`, `GitHubOAuth2Provider`, and friends each derive `AuthUser.id` from that provider's own subject claim, so signing in with two different providers currently produces two separate accounts, not one linked account. A dedicated linking API isn't implemented yet.
+
 ---
 
 ## Advanced: using `AuthyraClient` directly

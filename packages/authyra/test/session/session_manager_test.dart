@@ -1,12 +1,47 @@
 import 'dart:convert';
 
 import 'package:test/test.dart';
+import 'package:authyra/src/interfaces/auth_storage.dart';
 import 'package:authyra/src/session/session_manager.dart';
 import 'package:authyra/src/models/auth_account.dart';
 import 'package:authyra/src/models/auth_session.dart';
 import 'package:authyra/src/models/auth_user.dart';
 import 'package:authyra/src/storage/memory_storage.dart';
 import 'package:authyra/src/exceptions/auth_exceptions.dart';
+
+/// Wraps [InMemoryStorage] and throws on write for a chosen key, to simulate
+/// a storage backend failing partway through a multi-key persist.
+class _FlakyStorage implements AuthStorage {
+  final InMemoryStorage _inner = InMemoryStorage();
+  String? failOnWriteKey;
+
+  @override
+  Future<void> initialize() => _inner.initialize();
+
+  @override
+  Future<String?> read(String key) => _inner.read(key);
+
+  @override
+  Future<void> write(String key, String value) async {
+    if (key == failOnWriteKey) {
+      throw Exception('simulated storage failure for "$key"');
+    }
+    return _inner.write(key, value);
+  }
+
+  @override
+  Future<bool> delete(String key) => _inner.delete(key);
+
+  @override
+  Future<void> clear() => _inner.clear();
+
+  @override
+  Future<bool> containsKey(String key) => _inner.containsKey(key);
+
+  @override
+  Future<List<String>> getKeysWithPrefix(String prefix) =>
+      _inner.getKeysWithPrefix(prefix);
+}
 
 AuthUser _user(String id) => AuthUser(id: id, email: '$id@test.com');
 
@@ -62,6 +97,23 @@ void main() {
 
         expect(manager2.accountCount, 1);
         expect(manager2.activeSession?.user.id, 'alice');
+        await manager2.dispose();
+      });
+
+      test(
+          'restores both accounts and the active one after restart with '
+          'two accounts', () async {
+        await manager.saveSession(_session('alice'));
+        await manager.saveSession(_session('bob'), setAsActive: false);
+        await manager.switchAccount('bob');
+        await manager.dispose();
+
+        final manager2 = SessionManager(storage: storage);
+        await manager2.initialize();
+
+        expect(manager2.accountCount, 2);
+        expect(manager2.sessions.keys, containsAll(['alice', 'bob']));
+        expect(manager2.activeSession?.user.id, 'bob');
         await manager2.dispose();
       });
 
@@ -156,6 +208,32 @@ void main() {
         expect(await legacyStorage.read('authyra_session_registry'), isNull);
 
         await migratedManager.dispose();
+      });
+
+      test(
+          'a storage write failure does not leave the in-memory registry '
+          'ahead of what was actually persisted', () async {
+        final flaky = _FlakyStorage();
+        final flakyManager = SessionManager(storage: flaky);
+        await flakyManager.initialize();
+
+        await flakyManager.saveSession(_session('alice'));
+
+        flaky.failOnWriteKey = 'session:bob';
+        await expectLater(
+          () => flakyManager.saveSession(_session('bob'), setAsActive: false),
+          throwsA(isA<StorageException>()),
+        );
+
+        // Bob never made it into memory or storage; alice is untouched and
+        // still active, so the active account never points at unsaved data.
+        expect(flakyManager.accountCount, 1);
+        expect(flakyManager.sessions.containsKey('bob'), isFalse);
+        expect(flakyManager.activeSession?.user.id, 'alice');
+        expect(await flaky.read('session:bob'), isNull);
+        expect(await flaky.read('session:alice'), isNotNull);
+
+        await flakyManager.dispose();
       });
     });
 

@@ -35,6 +35,7 @@ All notable changes to the `authyra` package are documented here.
 - `AuthCallbacks.onBeforeAccountSwitch`, `onBeforeTokenRefresh`, and `onBeforeAccountRemove` were defined but never invoked. They are now called from `AccountManager.switchTo()` / `signOut()` and from the token-refresh path, so overriding them actually gates the corresponding operation.
 - `AccountSwitchEvent` and `AccountRemovedEvent` were documented in the event catalogue but never emitted. `AccountManager` now emits both at the appropriate point.
 - `TokenRefresher` retried a denied or unsupported refresh up to `maxRetries` times with `retryDelay` between attempts before expiring the session, even though retrying could never succeed (no refresh token, provider doesn't support refresh, callback denial). A `RefreshProvider` can now throw `RefreshDeniedException` to signal a non-retryable refresh; `TokenRefresher` expires the session immediately instead of wasting the retry budget. `AuthyraClient`'s internal refresh provider now does this for all three permanent cases.
+- `SessionManager._saveRegistry` updated the in-memory registry before writing to storage. If a write failed partway through (one account persisted, the next one throws), the in-memory state already claimed the full mutation had succeeded. The in-memory registry is now only updated after every write succeeds; a partial failure rolls back to the pre-mutation state instead of getting ahead of what storage actually has.
 
 ## [0.1.0] - 2026-02-23
 

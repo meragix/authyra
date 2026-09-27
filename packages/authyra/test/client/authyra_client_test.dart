@@ -28,16 +28,17 @@ class _FakeProvider implements AuthProvider {
   int signInCallCount = 0;
   int refreshCallCount = 0;
 
+  @override
+  final String id;
+
   _FakeProvider({
     this.returnUser,
     this.returnAccessToken,
     this.returnRefreshToken,
     this.returnExpiresAt,
     this.throwOnSignIn = false,
+    this.id = 'fake',
   });
-
-  @override
-  String get id => 'fake';
 
   @override
   String get name => 'Fake';
@@ -234,6 +235,31 @@ void main() {
         final c = _client(p);
         await c.initialize();
         expect(() => c.signIn('fake'), throwsA(isA<AuthException>()));
+        await c.dispose();
+      });
+
+      test(
+          'a failing provider does not corrupt an already-persisted session '
+          'of another provider', () async {
+        final good = _FakeProvider(
+          id: 'good',
+          returnUser: AuthUser(id: 'usr_1', email: 'alice@test.com'),
+          returnAccessToken: 'at_good',
+          returnExpiresAt: DateTime.now().add(const Duration(hours: 1)),
+        );
+        final bad = _FakeProvider(id: 'bad', throwOnSignIn: true);
+        final c =
+            AuthyraClient(providers: [good, bad], storage: InMemoryStorage());
+        await c.initialize();
+
+        await c.signIn('good');
+        expect((await c.getSession())?.user.id, 'usr_1');
+
+        expect(() => c.signIn('bad'), throwsA(isA<AuthException>()));
+
+        final session = await c.getSession();
+        expect(session?.user.id, 'usr_1');
+        expect(session?.accessToken, 'at_good');
         await c.dispose();
       });
 

@@ -663,9 +663,19 @@ class SessionManager with AuthyraLogging {
   ///
   /// Writing per-account keys instead of the whole registry means refreshing
   /// or removing one account never touches another account's stored tokens.
+  ///
+  /// The index (which carries [SessionRegistry.activeUserId]) is written
+  /// last, once every account write has succeeded, so a failure never leaves
+  /// the index pointing at an account whose data didn't actually persist.
+  ///
+  /// If any write fails partway through, [_registry] is rolled back to its
+  /// pre-mutation value rather than kept as the new, partially-persisted
+  /// state: the in-memory source of truth never claims a save succeeded when
+  /// storage doesn't back it up. Accounts written before the failing write
+  /// may still be present in storage; they will simply be re-adopted on the
+  /// next [_loadRegistry] rather than lost.
   Future<void> _saveRegistry(SessionRegistry registry) async {
     final previous = _registry;
-    _registry = registry;
     try {
       for (final entry in registry.sessions.entries) {
         if (previous.sessions[entry.key] == entry.value) continue;
@@ -689,9 +699,14 @@ class SessionManager with AuthyraLogging {
         }),
       );
 
+      _registry = registry;
       logDebug('Registry persisted: ${registry.accountCount} account(s)');
     } catch (e, stackTrace) {
-      logError('Failed to persist registry', e, stackTrace);
+      logError(
+        'Failed to persist registry, keeping prior in-memory state',
+        e,
+        stackTrace,
+      );
       throw StorageException('save registry', e);
     }
   }

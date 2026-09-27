@@ -201,6 +201,12 @@ class RateLimitPlugin extends AuthyraPlugin {
 
 ---
 
+## Known limitations
+
+**Account linking isn't built yet.** Multi-account (several signed-in identities switchable side by side) works today. Linking two providers to the *same* identity (e.g., Google and GitHub for one person) does not: `AuthSession.linkedAccounts` exists as a data structure, but none of the built-in providers merge two sign-ins into one `AuthUser`, each provider's own subject claim becomes the `AuthUser.id`. Two sign-ins via different providers currently register as two separate accounts, not one linked account.
+
+---
+
 ## Development
 
 This monorepo uses [Melos](https://melos.invertase.dev/).
