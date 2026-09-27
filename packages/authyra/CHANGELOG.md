@@ -9,11 +9,11 @@ All notable changes to the `authyra` package are documented here.
 - `TokenRefresher`: background token-refresh scheduler with configurable check interval, expiry threshold, and linear retry policy. Owned by `SessionManager`; wired up by `AuthyraClient` at construction time.
 - `SessionManager.refreshActiveSession()`: on-demand refresh delegating to `TokenRefresher` with the same retry policy.
 - `SessionManager.setRefreshCallbacks(onSuccess, onFailure)`: hook for `AuthyraClient` to emit `TokenRefreshEvent` / `SessionExpiredEvent` on refresh outcome.
-- `AutthyraClientBuilder`: fluent builder for configuring and instantiating `AuthyraClient` with custom providers, storage, config, and event bus.
+- `AuthyraClientBuilder`: fluent builder for configuring and instantiating `AuthyraClient` with custom providers, storage, config, and event bus.
 - `AuthyraPlugin`: extension interface for adding cross-cutting behaviour (audit logging, rate limiting, 2FA) via `install(client)` + optional `onBeforeSignIn` / `onAfterSignIn` / `onSessionExpired` hooks. Registered via `AuthyraClient(plugins: [...])` or `AuthyraClientBuilder.addPlugin()`.
 - `AuthAccount` model: provider-linked account entry with tokens and `providerData`. Full serialisation and `Equatable`.
 - `SessionMetadata` model: optional device/network context (`ipAddress`, `userAgent`, `deviceId`, `country`) attached to a session.
-- Typed `AuthSignInParams` hierarchy: `CredentialsSignInParams`, `OAuth2SignInParams`, `MagicLinkSignInParams`, `PhoneSignInParams`. Replaces `Map<String, dynamic>` for provider params.
+- Typed `AuthSignInParams` hierarchy: `CredentialsSignInParams`, `OAuth2SignInParams`. Replaces `Map<String, dynamic>` for provider params. (`MagicLinkSignInParams` and `PhoneSignInParams` are sketched out in source comments as a v2 idea; not shipped.)
 - `AuthyraClient.events`: per-instance `AuthEventBus` with typed `on<T>()`/`off<T>()` listeners and a raw broadcast `stream`.
 - Auto-refresh in `getSession()`: transparently refreshes the token when expiring soon (`autoRefresh: true`). Emits `SessionExpiredEvent` and returns `null` on failure.
 - Test suites for `SessionRegistry`, `InMemoryStorage`, `CredentialsProvider`, `SessionManager`, and `AuthyraClient` (107+ tests).
