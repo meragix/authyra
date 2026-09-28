@@ -104,7 +104,7 @@ Not part of the MVP, revisit only once a real case demands it:
 
 ### CI
 
-- [x] Add a GitHub Actions workflow running `melos run analyze`, `melos run format:check`, and `melos run test` on push and pull request. Added `.github/workflows/ci.yml`. Along the way, fixed two things that would have made the very first run red: pre-existing format debt unrelated to this work, and a broken `test` script that ran `dart test` uniformly across Flutter packages (they need `flutter test`); see the `chore:` commit right before this one.
+- [x] Add a GitHub Actions workflow running `melos run analyze`, `melos run format:check`, and `melos run test` on push and pull request. Added `.github/workflows/ci.yml`. It took three commits to actually go green on real GitHub Actions, not just locally: pre-existing format debt, a `test` script running `dart test` uniformly across Flutter packages (they need `flutter test`), a missing `melos` binary on PATH for the scripts' own internal `melos exec` calls, and two lints only the CI runner's newer Flutter (`channel: stable` resolved 3.47.5, local dev was on 3.41.6) surfaced. First fully green run: https://github.com/meragix/authyra/actions/runs/36360948524. Tracked as GitHub issue #59 (closed).
 
 ### Documentation
 
