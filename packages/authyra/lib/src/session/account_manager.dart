@@ -111,7 +111,7 @@ class AccountManager with AuthyraLogging {
   /// ```
   Future<List<AuthSession>> getAllSessions() async {
     try {
-      return sessionManager.getAllSessions();
+      return await sessionManager.getAllSessions();
     } catch (e, stackTrace) {
       logError('Failed to get sessions', e, stackTrace);
       throw SessionOperationException('get sessions', e);

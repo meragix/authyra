@@ -108,11 +108,10 @@ class AuthenticationFailedException extends AuthException {
   AuthenticationFailedException(
     String message, {
     this.providerName,
-    dynamic originalError,
+    super.originalError,
   }) : super(
           'Authentication failed${providerName != null ? ' for "$providerName"' : ''}: $message',
           code: 'AUTH_FAILED',
-          originalError: originalError,
         );
 }
 
@@ -230,13 +229,12 @@ class NetworkException extends AuthException {
     String message, {
     this.statusCode,
     this.url,
-    dynamic originalError,
+    super.originalError,
   }) : super(
           'Network error: $message'
           '${statusCode != null ? ' (HTTP $statusCode)' : ''}'
           '${url != null ? ' at $url' : ''}',
           code: 'NETWORK_ERROR',
-          originalError: originalError,
         );
 }
 
