@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - "examples/authyra_demo/**"
-      - "packages/authyra/**"
-      - "packages/authyra_flutter/**"
       - ".github/workflows/deploy-demo-web.yml"
 
 permissions:
